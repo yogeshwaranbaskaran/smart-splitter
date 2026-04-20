@@ -1,97 +1,118 @@
 import { useEffect, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { supabase } from './supabase'
 
-export default function Home({ user }) {
-  const [groups, setGroups] = useState([])
-  const [showCreate, setShowCreate] = useState(false)
-  const [groupName, setGroupName] = useState('')
+export default function GroupView() {
+  const { id } = useParams()
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [group, setGroup] = useState(null)
+  const [members, setMembers] = useState([])
+  const [splits, setSplits] = useState([])
+  const [inviteEmail, setInviteEmail] = useState('')
 
   useEffect(() => {
-    loadGroups()
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user || null)
+      setAuthLoading(false)
+    })
   }, [])
 
-  async function loadGroups() {
-    const { data } = await supabase
-      .from('group_members')
-      .select('group_id, groups(id, name, created_by, created_at)')
-      .eq('user_id', user.id)
+  useEffect(() => {
+    if (!id) return
+    loadGroup()
+    loadMembers()
+    loadSplits()
+  }, [id])
 
-    const grouped = data?.map(d => d.groups).filter(Boolean) || []
-    setGroups(grouped)
+  async function loadGroup() {
+    const { data } = await supabase.from('groups').select('*').eq('id', id).single()
+    setGroup(data)
   }
 
-  async function createGroup() {
-    if (!groupName.trim()) return
+  async function loadMembers() {
+    const { data } = await supabase.from('group_members').select('*').eq('group_id', id)
+    setMembers(data || [])
+  }
 
-    const { data: group, error } = await supabase
-      .from('groups')
-      .insert({ name: groupName, created_by: user.id })
-      .select()
-      .single()
+  async function loadSplits() {
+    const { data } = await supabase
+      .from('splits')
+      .select('*')
+      .eq('group_id', id)
+      .order('created_at', { ascending: false })
+    setSplits(data || [])
+  }
 
-    if (error) { alert('Error creating group'); return }
+  async function inviteMember() {
+    if (!inviteEmail.trim()) return
+    const already = members.find(m => m.email === inviteEmail)
+    if (already) { alert('Already a member'); return }
 
     await supabase.from('group_members').insert({
-      group_id: group.id,
-      user_id: user.id,
-      email: user.email
+      group_id: id,
+      user_id: '00000000-0000-0000-0000-000000000000',
+      email: inviteEmail
     })
 
-    setGroupName('')
-    setShowCreate(false)
-    loadGroups()
+    setInviteEmail('')
+    loadMembers()
+    alert(`Invited ${inviteEmail} — they will see this group when they log in`)
   }
 
-  async function logout() {
-    await supabase.auth.signOut()
-    window.location.reload()
-  }
+  if (authLoading) return <div style={{ padding: '2rem' }}>Loading...</div>
+  if (!user) return <div style={{ padding: '2rem' }}>Please <a href="/">login</a> first.</div>
+  if (!group) return <div style={{ padding: '2rem' }}>Loading group...</div>
 
   return (
     <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ margin: 0 }}>Smart Splitter</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <span style={{ fontSize: '0.85rem', color: '#888' }}>{user.email}</span>
-          <button onClick={logout} style={{ padding: '0.4rem 0.75rem', cursor: 'pointer' }}>Logout</button>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <a href="/" style={{ color: '#888', fontSize: '0.9rem' }}>← Back to groups</a>
+      </div>
+
+      <h2>{group.name}</h2>
+
+      <div style={{ marginBottom: '2rem' }}>
+        <h3>Members</h3>
+        {members.map(m => (
+          <div key={m.id} style={{ padding: '0.4rem 0', borderBottom: '1px solid #222', fontSize: '0.9rem' }}>
+            {m.email} {m.user_id === user.id ? '(you)' : ''}
+          </div>
+        ))}
+        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+          <input
+            placeholder="Friend's email"
+            value={inviteEmail}
+            onChange={e => setInviteEmail(e.target.value)}
+            style={{ flex: 1, padding: '0.5rem' }}
+          />
+          <button
+            onClick={inviteMember}
+            style={{ padding: '0.5rem 1rem', cursor: 'pointer' }}
+          >
+            Invite
+          </button>
         </div>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h2 style={{ margin: 0 }}>Your groups</h2>
+        <h3 style={{ margin: 0 }}>Splits</h3>
         <button
-          onClick={() => setShowCreate(!showCreate)}
+          onClick={() => window.location.href = `/?group=${id}`}
           style={{ padding: '0.5rem 1rem', cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px' }}
         >
-          + Create group
+          + New split
         </button>
       </div>
 
-      {showCreate && (
-        <div style={{ marginBottom: '1.5rem', padding: '1rem', border: '1px solid #333', borderRadius: '8px' }}>
-          <input
-            placeholder="Group name (e.g. Roommates, Goa trip)"
-            value={groupName}
-            onChange={e => setGroupName(e.target.value)}
-            style={{ width: '100%', padding: '0.5rem', marginBottom: '0.75rem', boxSizing: 'border-box' }}
-          />
-          <button
-            onClick={createGroup}
-            style={{ padding: '0.5rem 1.5rem', cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px' }}
-          >
-            Create
-          </button>
-        </div>
+      {splits.length === 0 && (
+        <p style={{ color: '#888' }}>No splits yet. Create one!</p>
       )}
 
-      {groups.length === 0 && (
-        <p style={{ color: '#888' }}>No groups yet. Create one and invite your friends.</p>
-      )}
-
-      {groups.map(group => (
+      {splits.map(split => (
         <div
-          key={group.id}
-          onClick={() => window.location.href = `/group/${group.id}`}
+          key={split.id}
+          onClick={() => window.location.href = `/split/${split.id}`}
           style={{
             padding: '1rem',
             marginBottom: '0.75rem',
@@ -100,9 +121,9 @@ export default function Home({ user }) {
             cursor: 'pointer'
           }}
         >
-          <strong>{group.name}</strong>
+          <strong>{split.name}</strong>
           <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>
-            {group.created_by === user.id ? 'Created by you' : 'Member'}
+            By {split.created_by} · {new Date(split.created_at).toLocaleDateString()}
           </div>
         </div>
       ))}

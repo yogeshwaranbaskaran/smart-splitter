@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useSearchParams, useLocation } from 'react-router-dom'
+import { useParams, useSearchParams} from 'react-router-dom'
 import { supabase } from './supabase'
 import Auth from './Auth.jsx'
 import Home from './Home.jsx'
@@ -12,7 +12,7 @@ export default function AppWrapper() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
   const groupId = searchParams.get('group')
-  const location = useLocation()
+  const isGroupPage = window.location.pathname.startsWith('/group/')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -32,7 +32,7 @@ export default function AppWrapper() {
   if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>
   if (!user) return <Auth />
 
-  const isGroupPage = location.pathname.startsWith('/group/')
+  
   
   if (isGroupPage) return <GroupView user={user} />
   if (groupId) return <App user={user} groupId={groupId} />

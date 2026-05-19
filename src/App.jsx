@@ -78,18 +78,26 @@ export default function App({ user, groupId }) {
     <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
       <h2>Split created!</h2>
       <p>Share this link with your friends:</p>
-      <div style={{ background: '#1a1a1a', padding: '1rem', borderRadius: '8px', wordBreak: 'break-all' }}>
+      <div style={{ background: '#c3e3fa', padding: '1rem', borderRadius: '8px', wordBreak: 'break-all' }}>
         {link}
       </div>
       <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
         <button
-          onClick={() => navigator.clipboard.writeText(link)}
+          onClick={() => setSplitCreated(null)}
+          style={{ padding: '0.5rem 1rem', cursor: 'pointer' }}
+        >
+        ← Edit split
+        </button>
+          <button
+            onClick={() => navigator.clipboard.writeText(link)}
           style={{ padding: '0.5rem 1rem', cursor: 'pointer' }}
         >
           Copy link
         </button>
         <button
-          onClick={() => window.location.href = `/split/${splitCreated.id}?creator=${encodeURIComponent(creatorName)}`}
+          onClick={() => {
+          navigator.clipboard.writeText(link)
+          window.open(`/split/${splitCreated.id}?creator=${encodeURIComponent(creatorName)}`, '_blank')}}
           style={{ padding: '0.5rem 1.5rem', cursor: 'pointer', background: '#4ade80', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 'bold' }}
         >
           Next → Make my selections
@@ -175,7 +183,9 @@ export default function App({ user, groupId }) {
               ))}
             </tbody>
           </table>
-
+          <div style={{ marginTop: '1rem', fontSize: '1.1rem', fontWeight: 'bold' }}>
+            Total: ₹{items.reduce((sum, item) => sum + Number(item.price), 0).toFixed(2)}
+          </div>
           <button
             onClick={createSplit}
             style={{ marginTop: '1.5rem', padding: '0.75rem 2rem', fontSize: '1rem', cursor: 'pointer' }}

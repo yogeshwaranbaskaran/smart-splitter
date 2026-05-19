@@ -5,7 +5,7 @@ export default function Auth() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: 'https://smart-splitter-psi.vercel.app'
+        redirectTo: window.location.origin
       }
     })
   }

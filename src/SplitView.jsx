@@ -155,13 +155,25 @@ export default function SplitView() {
   return (
     <div style={{ padding: '2rem', maxWidth: '500px', margin: '0 auto' }}>
       <h2>✓ Selection confirmed</h2>
+      <div style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>
+        Bill total: ₹{items.reduce((sum, item) => sum + Number(item.price), 0).toFixed(2)}
+      </div>
       <p style={{ color: '#aaa' }}>Waiting for everyone to confirm...</p>
       <button
         onClick = {loadSelections}
         style={{ padding: '0.4rem 1rem', cursor: 'pointer', marginBottom: '1rem' }}
        >
         Refresh
-        
+          
+      </button>
+      <button
+        onClick={() => {
+        sessionStorage.removeItem(`confirmed-${id}`)
+        setConfirmed(false)}}
+
+        style={{ padding: '0.5rem 1rem', cursor: 'pointer', marginBottom: '1rem' }}
+        >
+        ← Edit my selection
       </button>
 
       <h3 style={{ marginTop: '1.5rem' }}>Live summary</h3>
@@ -177,13 +189,13 @@ export default function SplitView() {
         const who = getItemSelectors(item.id)
         const share = who.length > 0 ? (item.price / who.length).toFixed(2) : item.price
         return (
-          <div key={item.id} style={{ marginBottom: '0.75rem', padding: '0.75rem', background: '#1a1a1a', borderRadius: '8px' }}>
+          <div key={item.id} style={{ marginBottom: '0.75rem', padding: '0.75rem', background: '#c3e3fa', borderRadius: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <strong>{item.name}</strong>
               <span style={{ color: '#666', fontSize: '0.9rem' }}>x{item.quantity}</span>
               <span>₹{item.price}</span>
             </div>
-            <div style={{ fontSize: '0.85rem', color: '#aaa', marginTop: '0.25rem' }}>
+            <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
               {who.length > 0 ? `${who.join(', ')} — ₹${share} each` : 'Nobody picked this'}
             </div>
           </div>
@@ -197,6 +209,12 @@ export default function SplitView() {
     <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
       <h2>{split.name}</h2>
       <p>Hi {userName}, pick your items:</p>
+      <button
+        onClick={() => window.history.back()}
+        style={{ padding: '0.5rem 1rem', cursor: 'pointer', marginBottom: '1rem' }}
+      >
+  ← Back
+</button>
 
       {items.map(item => {
         const who = getItemSelectors(item.id)

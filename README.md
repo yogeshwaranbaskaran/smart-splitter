@@ -14,7 +14,7 @@ Works with any language receipts, Translates into english.
 - Supabase (database + realtime)
 - Google Gemini (reads the bills)
 - Vercel (hosting)
-- 
+
 ## How the tax logic works
 The AI only pulls out raw numbers — items, prices, grand total. 
 The actual tax math happens in code: if the items add up to the total, tax is already included. 

@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const genAI = new GoogleGenerativeAI('AIzaSyDklWhkT19vwGqPidrjKy3QMpjID8oGEtA')
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
 
 export async function parseBill(imageFile) {
   const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })

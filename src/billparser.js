@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
 
 export async function parseBill(imageFile) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' })
   const imageData = await fileToBase64(imageFile)
 
   const prompt = `Look at this bill image. Return ONLY this JSON, no markdown, no explanation.

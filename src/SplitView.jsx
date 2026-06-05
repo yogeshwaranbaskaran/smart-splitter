@@ -14,12 +14,30 @@ export default function SplitView() {
   const [confirmed, setConfirmed] = useState(() => !!sessionStorage.getItem(`confirmed-${id}`))
   const [allSelections, setAllSelections] = useState([])
   const [showSummary, setShowSummary] = useState(false)
+  const [currentEmail, setCurrentEmail] = useState(null)
   useEffect(() => {
   if (creatorFromUrl) {
     setUserName(creatorFromUrl)
     setNameConfirmed(true)
   }
-}, [creatorFromUrl])    
+}, [creatorFromUrl])
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      setCurrentEmail(session?.user?.email || null)
+      if (session?.user) {
+        const { data: p } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', session.user.id)
+          .maybeSingle()
+        if (p?.username) {
+          setUserName(p.username)
+          setNameConfirmed(true)
+        }
+      }
+    })
+  }, [])
 
   useEffect(() => {
   loadSplit()
@@ -27,13 +45,21 @@ export default function SplitView() {
 
   const channel = supabase
     .channel(`selections-${id}`)
-    .on('postgres_changes', { 
-      event: '*', 
-      schema: 'public', 
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
       table: 'selections',
       filter: `split_id=eq.${id}`
     }, () => {
       loadSelections()
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'splits',
+      filter: `id=eq.${id}`
+    }, () => {
+      loadSplit()
     })
     .subscribe()
 
@@ -101,6 +127,31 @@ export default function SplitView() {
     setConfirmed(true)
   }
 
+  async function markNothing() {
+    if (!userName) return
+    // record that this person acted but owes nothing (a marker row, no item)
+    await supabase.from('selections').delete().eq('split_id', id).eq('user_name', userName)
+    await supabase.from('selections').insert({
+      split_id: id,
+      item_id: null,
+      user_name: userName,
+      share: 0
+    })
+    sessionStorage.setItem(`confirmed-${id}`, 'true')
+    setConfirmed(true)
+  }
+
+  async function finalizeSplit() {
+    if (!window.confirm('Finalize this split? Nobody can change their selections after this.')) return
+    await supabase.from('splits').update({ finalized: true }).eq('id', id)
+    setSplit(prev => (prev ? { ...prev, finalized: true } : prev))
+  }
+
+  async function unfinalizeSplit() {
+    await supabase.from('splits').update({ finalized: false }).eq('id', id)
+    setSplit(prev => (prev ? { ...prev, finalized: false } : prev))
+  }
+
   function getItemSelectors(itemId) {
     return allSelections
       .filter(s => s.item_id === itemId)
@@ -114,6 +165,85 @@ export default function SplitView() {
   }
 
   if (!split) return <div style={{ padding: '2rem' }}>Loading...</div>
+
+  // manual (GPay-style) splits: just show who owes what, read-only
+  if (split.split_type === 'manual') {
+    const total = allSelections.reduce((sum, s) => sum + Number(s.share), 0)
+    return (
+      <div style={{ padding: '2rem', maxWidth: '500px', margin: '0 auto' }}>
+        <a href={split.group_id ? `/group/${split.group_id}` : '/'} style={{ color: '#888', fontSize: '0.9rem', display: 'inline-block', marginBottom: '1rem' }}>← Back</a>
+        <h2>{split.name}</h2>
+        <p style={{ color: '#888' }}>Created by {split.created_by} · {new Date(split.created_at).toLocaleDateString()}</p>
+        <div style={{ fontSize: '1.2rem', margin: '1rem 0', fontWeight: 'bold' }}>
+          Total: ₹{total.toFixed(2)}
+        </div>
+        <h3>Who owes what</h3>
+        {allSelections.map(s => (
+          <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', marginBottom: '0.5rem', background: '#c3e3fa', borderRadius: '8px' }}>
+            <span>{s.user_name}</span>
+            <strong>₹{Number(s.share).toFixed(2)}</strong>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  const isCreator = currentEmail && currentEmail === split.created_by
+
+  if (split.finalized) {
+    const summary = {}
+    allSelections.forEach(s => {
+      const item = items.find(i => i.id === s.item_id)
+      if (!item) return
+      const pickers = allSelections.filter(x => x.item_id === s.item_id)
+      summary[s.user_name] = (summary[s.user_name] || 0) + item.price / pickers.length
+    })
+
+    return (
+      <div style={{ padding: '2rem', maxWidth: '500px', margin: '0 auto' }}>
+        <a href={split.group_id ? `/group/${split.group_id}` : '/'} style={{ color: '#888', fontSize: '0.9rem', display: 'inline-block', marginBottom: '1rem' }}>← Back</a>
+        <h2>🔒 {split.name} — Final</h2>
+        <p style={{ color: '#888' }}>Created by {split.created_by} · {new Date(split.created_at).toLocaleDateString()}</p>
+        <p style={{ color: '#888' }}>This split is finalized. Selections are locked.</p>
+        {isCreator && (
+          <button
+            onClick={unfinalizeSplit}
+            style={{ padding: '0.5rem 1.25rem', cursor: 'pointer', background: '#fff', color: '#2563eb', border: '1px solid #2563eb', borderRadius: '6px', marginBottom: '1rem' }}
+          >
+            ← Reopen split (allow edits again)
+          </button>
+        )}
+        <div style={{ fontSize: '1.1rem', margin: '1rem 0' }}>
+          Bill total: ₹{items.reduce((sum, item) => sum + Number(item.price), 0).toFixed(2)}
+        </div>
+
+        <h3>Who owes what</h3>
+        {Object.entries(summary).map(([name, total]) => (
+          <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #333' }}>
+            <span>{name}</span>
+            <strong>₹{total.toFixed(2)}</strong>
+          </div>
+        ))}
+
+        <h3 style={{ marginTop: '1.5rem' }}>Item breakdown</h3>
+        {items.map(item => {
+          const who = getItemSelectors(item.id)
+          const share = who.length > 0 ? (item.price / who.length).toFixed(2) : item.price
+          return (
+            <div key={item.id} style={{ marginBottom: '0.75rem', padding: '0.75rem', background: '#c3e3fa', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <strong>{item.name}</strong>
+                <span>₹{item.price}</span>
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
+                {who.length > 0 ? `${who.join(', ')} — ₹${share} each` : 'Nobody picked this'}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
 
   if (!nameConfirmed) {
     return (
@@ -154,7 +284,9 @@ export default function SplitView() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '500px', margin: '0 auto' }}>
+      <a href={split.group_id ? `/group/${split.group_id}` : '/'} style={{ color: '#888', fontSize: '0.9rem', display: 'inline-block', marginBottom: '1rem' }}>← Back</a>
       <h2>✓ Selection confirmed</h2>
+      <p style={{ color: '#888', marginTop: '-0.5rem' }}>Created by {split.created_by} · {new Date(split.created_at).toLocaleDateString()}</p>
       <div style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>
         Bill total: ₹{items.reduce((sum, item) => sum + Number(item.price), 0).toFixed(2)}
       </div>
@@ -175,6 +307,15 @@ export default function SplitView() {
         >
         ← Edit my selection
       </button>
+
+      {isCreator && (
+        <button
+          onClick={finalizeSplit}
+          style={{ display: 'block', padding: '0.6rem 1.5rem', cursor: 'pointer', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', marginBottom: '1rem', fontWeight: 'bold' }}
+        >
+          🔒 Finalize split (lock for everyone)
+        </button>
+      )}
 
       <h3 style={{ marginTop: '1.5rem' }}>Live summary</h3>
       {Object.entries(summary).map(([name, total]) => (
@@ -207,15 +348,9 @@ export default function SplitView() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
+      <a href={split.group_id ? `/group/${split.group_id}` : '/'} style={{ color: '#888', fontSize: '0.9rem', display: 'inline-block', marginBottom: '1rem' }}>← Back</a>
       <h2>{split.name}</h2>
       <p>Hi {userName}, pick your items:</p>
-      <button
-        onClick={() => window.history.back()}
-        style={{ padding: '0.5rem 1rem', cursor: 'pointer', marginBottom: '1rem' }}
-      >
-  ← Back
-</button>
-
       {items.map(item => {
         const who = getItemSelectors(item.id)
         return (
@@ -247,12 +382,20 @@ export default function SplitView() {
         Your total: ₹{getMyTotal()}
       </div>
 
-      <button
-        onClick={confirmSelections}
-        style={{ marginTop: '1rem', padding: '0.75rem 2rem', fontSize: '1rem', cursor: 'pointer' }}
-      >
-        Confirm my selection
-      </button>
+      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+        <button
+          onClick={confirmSelections}
+          style={{ padding: '0.75rem 2rem', fontSize: '1rem', cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px' }}
+        >
+          Confirm my selection
+        </button>
+        <button
+          onClick={markNothing}
+          style={{ padding: '0.75rem 1.5rem', fontSize: '1rem', cursor: 'pointer', background: '#fff', color: '#666', border: '1px solid #ddd', borderRadius: '6px' }}
+        >
+          Nothing here is mine
+        </button>
+      </div>
     </div>
   )
 }

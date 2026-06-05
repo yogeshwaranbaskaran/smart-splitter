@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { parseBill } from './billparser'
 import { supabase } from './supabase'
+import ManualSplit from './ManualSplit'
 
-export default function App({ user, groupId }) {
+export default function App({ user, groupId, profile }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [splitName, setSplitName] = useState('')
-  const [creatorName, setCreatorName] = useState(user?.email?.split('@')[0] || '')
+  const [creatorName, setCreatorName] = useState(profile?.username || user?.email?.split('@')[0] || '')
   const [splitCreated, setSplitCreated] = useState(null)
+  // guests (no group) only get the scan flow; group splits choose scan vs manual first
+  const [mode, setMode] = useState(groupId ? null : 'scan')
 
   async function handleUpload(e) {
     const file = e.target.files[0]
@@ -69,7 +72,41 @@ export default function App({ user, groupId }) {
 
     await supabase.from('items').insert(itemsToInsert)
 
-    setSplitCreated(split)
+    // logged-in creator → straight to picking items; guests → keep the copy-link screen
+    if (user) {
+      window.location.href = `/split/${split.id}`
+    } else {
+      setSplitCreated(split)
+    }
+  }
+
+  if (groupId && mode === null) {
+    return (
+      <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
+        <h1>New split</h1>
+        <p style={{ color: '#888' }}>How do you want to split?</p>
+        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+          <button
+            onClick={() => setMode('scan')}
+            style={{ flex: 1, padding: '2rem 1rem', cursor: 'pointer', background: '#fff', border: '2px solid #ddd', borderRadius: '12px', fontSize: '1rem' }}
+          >
+            📷<br />Scan a bill
+            <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.5rem' }}>Friends pick their own items</div>
+          </button>
+          <button
+            onClick={() => setMode('manual')}
+            style={{ flex: 1, padding: '2rem 1rem', cursor: 'pointer', background: '#fff', border: '2px solid #ddd', borderRadius: '12px', fontSize: '1rem' }}
+          >
+            ✍️<br />Split manually
+            <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.5rem' }}>Enter a total, split evenly or unevenly</div>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (mode === 'manual') {
+    return <ManualSplit user={user} groupId={groupId} onBack={() => setMode(null)} />
   }
 
   if (splitCreated) {

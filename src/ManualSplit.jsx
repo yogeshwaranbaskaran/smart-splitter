@@ -101,78 +101,75 @@ export default function ManualSplit({ user, groupId, onBack }) {
     window.location.href = `/split/${split.id}`
   }
 
+  const unevenBad = autoEach < -0.5 || Math.abs(remaining) > 0.5
+
   return (
-    <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', marginBottom: '1rem' }}>
-        ← Back
-      </button>
-      <h1>Split manually</h1>
+    <div className="page">
+      <button onClick={onBack} className="back-link">Back</button>
+      <h2>Split manually</h2>
 
-      <input
-        placeholder="Split name (e.g. Dinner)"
-        value={splitName}
-        onChange={e => setSplitName(e.target.value)}
-        style={{ width: '100%', padding: '0.6rem', marginBottom: '1rem', boxSizing: 'border-box' }}
-      />
+      <div className="mt-2">
+        <input
+          className="input field"
+          placeholder="Split name (e.g. Dinner)"
+          value={splitName}
+          onChange={e => setSplitName(e.target.value)}
+        />
+        <input
+          className="input"
+          type="number"
+          placeholder="Total amount (₹)"
+          value={total}
+          onChange={e => setTotal(e.target.value)}
+        />
+      </div>
 
-      <input
-        type="number"
-        placeholder="Total amount (₹)"
-        value={total}
-        onChange={e => setTotal(e.target.value)}
-        style={{ width: '100%', padding: '0.6rem', marginBottom: '1.5rem', boxSizing: 'border-box' }}
-      />
+      <h3 className="mt-2">Who's included?</h3>
+      {members.length === 0 && <p className="muted">No members found in this group.</p>}
+      <div className="card" style={{ padding: '0.5rem 0.9rem' }}>
+        {members.map((m, i) => (
+          <label key={m.user_id} className="row" style={{ padding: '0.55rem 0', borderTop: i ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}>
+            <span className="cluster">
+              <input type="checkbox" checked={!!included[m.name]} onChange={() => toggleMember(m.name)} style={{ accentColor: 'var(--accent)', width: '1.05rem', height: '1.05rem' }} />
+              <span>@{m.name}</span>
+            </span>
+            {mode === 'uneven' && included[m.name] && (
+              <input
+                className="input"
+                type="number"
+                placeholder="₹"
+                value={m.name in customShares ? customShares[m.name] : (autoEach > 0 ? autoEach.toFixed(2) : '')}
+                onChange={e => setShare(m.name, e.target.value)}
+                style={{ width: '100px', color: m.name in customShares ? 'var(--text)' : 'var(--text-faint)' }}
+              />
+            )}
+            {mode === 'even' && included[m.name] && (
+              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>₹{evenEach.toFixed(2)}</span>
+            )}
+          </label>
+        ))}
+      </div>
 
-      <h3>Who's included?</h3>
-      {members.length === 0 && <p style={{ color: '#888' }}>No members found in this group.</p>}
-      {members.map(m => (
-        <label key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', cursor: 'pointer' }}>
-          <input type="checkbox" checked={!!included[m.name]} onChange={() => toggleMember(m.name)} />
-          <span>@{m.name}</span>
-          {mode === 'uneven' && included[m.name] && (
-            <input
-              type="number"
-              placeholder="₹"
-              value={m.name in customShares ? customShares[m.name] : (autoEach > 0 ? autoEach.toFixed(2) : '')}
-              onChange={e => setShare(m.name, e.target.value)}
-              style={{ width: '90px', padding: '0.3rem', marginLeft: 'auto', color: m.name in customShares ? '#000' : '#999' }}
-            />
-          )}
-          {mode === 'even' && included[m.name] && (
-            <span style={{ marginLeft: 'auto', color: '#16a34a' }}>₹{evenEach.toFixed(2)}</span>
-          )}
-        </label>
-      ))}
-
-      <div style={{ margin: '1.5rem 0', display: 'flex', gap: '0.5rem' }}>
-        <button
-          onClick={() => setMode('even')}
-          style={{ flex: 1, padding: '0.5rem', cursor: 'pointer', background: mode === 'even' ? '#22c55e' : '#fff', color: mode === 'even' ? '#fff' : '#000', border: '1px solid #ddd', borderRadius: '6px' }}
-        >
+      <div className="cluster mt-2" style={{ gap: '0.5rem' }}>
+        <button onClick={() => setMode('even')} className={`btn btn-block ${mode === 'even' ? 'btn-primary' : ''}`}>
           Split evenly
         </button>
-        <button
-          onClick={() => setMode('uneven')}
-          style={{ flex: 1, padding: '0.5rem', cursor: 'pointer', background: mode === 'uneven' ? '#22c55e' : '#fff', color: mode === 'uneven' ? '#fff' : '#000', border: '1px solid #ddd', borderRadius: '6px' }}
-        >
+        <button onClick={() => setMode('uneven')} className={`btn btn-block ${mode === 'uneven' ? 'btn-primary' : ''}`}>
           Split unevenly
         </button>
       </div>
 
       {mode === 'uneven' && selectedNames.length > 0 && (
-        <div style={{ marginBottom: '1rem', color: autoEach < -0.5 || Math.abs(remaining) > 0.5 ? '#ef4444' : '#16a34a' }}>
+        <p className="mt-1" style={{ color: unevenBad ? 'var(--danger)' : 'var(--success)', fontSize: '0.9rem' }}>
           {autoEach < -0.5
             ? `Over by ₹${(-remaining).toFixed(2)} — you've assigned more than the total`
             : untouchedNames.length > 0
               ? `₹${(totalNum - sumEdited).toFixed(2)} split evenly among ${untouchedNames.length} other${untouchedNames.length > 1 ? 's' : ''}`
               : `Remaining: ₹${remaining.toFixed(2)} ${Math.abs(remaining) < 0.5 ? '✓' : '(must reach ₹0)'}`}
-        </div>
+        </p>
       )}
 
-      <button
-        onClick={createSplit}
-        style={{ padding: '0.75rem 2rem', fontSize: '1rem', cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px' }}
-      >
+      <button onClick={createSplit} className="btn btn-lg btn-primary mt-2">
         Create split
       </button>
     </div>

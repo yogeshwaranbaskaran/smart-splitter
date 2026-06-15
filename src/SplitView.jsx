@@ -13,14 +13,14 @@ export default function SplitView() {
   const [selections, setSelections] = useState({})
   const [confirmed, setConfirmed] = useState(() => !!sessionStorage.getItem(`confirmed-${id}`))
   const [allSelections, setAllSelections] = useState([])
-  const [showSummary, setShowSummary] = useState(false)
   const [currentEmail, setCurrentEmail] = useState(null)
+
   useEffect(() => {
-  if (creatorFromUrl) {
-    setUserName(creatorFromUrl)
-    setNameConfirmed(true)
-  }
-}, [creatorFromUrl])
+    if (creatorFromUrl) {
+      setUserName(creatorFromUrl)
+      setNameConfirmed(true)
+    }
+  }, [creatorFromUrl])
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -40,31 +40,31 @@ export default function SplitView() {
   }, [])
 
   useEffect(() => {
-  loadSplit()
-  loadSelections()
+    loadSplit()
+    loadSelections()
 
-  const channel = supabase
-    .channel(`selections-${id}`)
-    .on('postgres_changes', {
-      event: '*',
-      schema: 'public',
-      table: 'selections',
-      filter: `split_id=eq.${id}`
-    }, () => {
-      loadSelections()
-    })
-    .on('postgres_changes', {
-      event: '*',
-      schema: 'public',
-      table: 'splits',
-      filter: `id=eq.${id}`
-    }, () => {
-      loadSplit()
-    })
-    .subscribe()
+    const channel = supabase
+      .channel(`selections-${id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'selections',
+        filter: `split_id=eq.${id}`
+      }, () => {
+        loadSelections()
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'splits',
+        filter: `id=eq.${id}`
+      }, () => {
+        loadSplit()
+      })
+      .subscribe()
 
-  return () => supabase.removeChannel(channel)
-}, [id])
+    return () => supabase.removeChannel(channel)
+  }, [id])
 
   async function loadSplit() {
     const { data: splitData } = await supabase
@@ -164,23 +164,31 @@ export default function SplitView() {
       .reduce((sum, item) => sum + Number(item.price), 0)
   }
 
-  if (!split) return <div style={{ padding: '2rem' }}>Loading...</div>
+  const backHref = split && (split.group_id ? `/group/${split.group_id}` : '/')
+
+  if (!split) return <div className="screen-msg">Loading…</div>
 
   // manual (GPay-style) splits: just show who owes what, read-only
   if (split.split_type === 'manual') {
     const total = allSelections.reduce((sum, s) => sum + Number(s.share), 0)
     return (
-      <div style={{ padding: '2rem', maxWidth: '500px', margin: '0 auto' }}>
-        <a href={split.group_id ? `/group/${split.group_id}` : '/'} style={{ color: '#888', fontSize: '0.9rem', display: 'inline-block', marginBottom: '1rem' }}>← Back</a>
+      <div className="page" style={{ maxWidth: '480px' }}>
+        <a href={backHref} className="back-link">Back</a>
         <h2>{split.name}</h2>
-        <p style={{ color: '#888' }}>Created by {split.created_by} · {new Date(split.created_at).toLocaleDateString()}</p>
-        <div style={{ fontSize: '1.2rem', margin: '1rem 0', fontWeight: 'bold' }}>
-          Total: ₹{total.toFixed(2)}
+        <p className="card-sub">Created by {split.created_by} · {new Date(split.created_at).toLocaleDateString()}</p>
+
+        <div className="amount-hero mt-2">
+          <div className="lbl">Total</div>
+          <div className="val">₹{total.toFixed(2)}</div>
         </div>
-        <h3>Who owes what</h3>
+
+        <h3 className="mt-2" style={{ marginBottom: '0.6rem' }}>Who owes what</h3>
         {allSelections.map(s => (
-          <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', marginBottom: '0.5rem', background: '#c3e3fa', borderRadius: '8px' }}>
-            <span>{s.user_name}</span>
+          <div key={s.id} className="line">
+            <span className="cluster">
+              <span className="avatar-sm">{s.user_name.trim().charAt(0).toUpperCase()}</span>
+              {s.user_name}
+            </span>
             <strong>₹{Number(s.share).toFixed(2)}</strong>
           </div>
         ))}
@@ -189,6 +197,42 @@ export default function SplitView() {
   }
 
   const isCreator = currentEmail && currentEmail === split.created_by
+  const billTotal = items.reduce((sum, item) => sum + Number(item.price), 0).toFixed(2)
+
+  // shared: who-owes-what + item breakdown blocks
+  function OwesAndBreakdown(summary) {
+    return (
+      <>
+        <h3 className="mt-2" style={{ marginBottom: '0.6rem' }}>Who owes what</h3>
+        {Object.entries(summary).map(([name, total]) => (
+          <div key={name} className="line">
+            <span className="cluster">
+              <span className="avatar-sm">{name.trim().charAt(0).toUpperCase()}</span>
+              {name}
+            </span>
+            <strong>₹{total.toFixed(2)}</strong>
+          </div>
+        ))}
+
+        <h3 className="mt-2" style={{ marginBottom: '0.6rem' }}>Item breakdown</h3>
+        {items.map(item => {
+          const who = getItemSelectors(item.id)
+          const share = who.length > 0 ? (item.price / who.length).toFixed(2) : item.price
+          return (
+            <div key={item.id} className="bill-item">
+              <div className="row">
+                <strong>{item.name}</strong>
+                <span>₹{item.price}</span>
+              </div>
+              <div className="card-sub">
+                {who.length > 0 ? `${who.join(', ')} — ₹${share} each` : 'Nobody picked this'}
+              </div>
+            </div>
+          )
+        })}
+      </>
+    )
+  }
 
   if (split.finalized) {
     const summary = {}
@@ -200,71 +244,48 @@ export default function SplitView() {
     })
 
     return (
-      <div style={{ padding: '2rem', maxWidth: '500px', margin: '0 auto' }}>
-        <a href={split.group_id ? `/group/${split.group_id}` : '/'} style={{ color: '#888', fontSize: '0.9rem', display: 'inline-block', marginBottom: '1rem' }}>← Back</a>
-        <h2>🔒 {split.name} — Final</h2>
-        <p style={{ color: '#888' }}>Created by {split.created_by} · {new Date(split.created_at).toLocaleDateString()}</p>
-        <p style={{ color: '#888' }}>This split is finalized. Selections are locked.</p>
+      <div className="page" style={{ maxWidth: '480px' }}>
+        <a href={backHref} className="back-link">Back</a>
+        <div className="cluster">
+          <h2>{split.name}</h2>
+          <span className="badge badge-muted">🔒 Final</span>
+        </div>
+        <p className="card-sub">Created by {split.created_by} · {new Date(split.created_at).toLocaleDateString()}</p>
+        <p className="muted mt-1">This split is finalized. Selections are locked.</p>
         {isCreator && (
-          <button
-            onClick={unfinalizeSplit}
-            style={{ padding: '0.5rem 1.25rem', cursor: 'pointer', background: '#fff', color: '#2563eb', border: '1px solid #2563eb', borderRadius: '6px', marginBottom: '1rem' }}
-          >
+          <button onClick={unfinalizeSplit} className="btn btn-sm mt-1" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>
             ← Reopen split (allow edits again)
           </button>
         )}
-        <div style={{ fontSize: '1.1rem', margin: '1rem 0' }}>
-          Bill total: ₹{items.reduce((sum, item) => sum + Number(item.price), 0).toFixed(2)}
+        <div className="amount-hero mt-2">
+          <div className="lbl">Bill total</div>
+          <div className="val">₹{billTotal}</div>
         </div>
-
-        <h3>Who owes what</h3>
-        {Object.entries(summary).map(([name, total]) => (
-          <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #333' }}>
-            <span>{name}</span>
-            <strong>₹{total.toFixed(2)}</strong>
-          </div>
-        ))}
-
-        <h3 style={{ marginTop: '1.5rem' }}>Item breakdown</h3>
-        {items.map(item => {
-          const who = getItemSelectors(item.id)
-          const share = who.length > 0 ? (item.price / who.length).toFixed(2) : item.price
-          return (
-            <div key={item.id} style={{ marginBottom: '0.75rem', padding: '0.75rem', background: '#c3e3fa', borderRadius: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <strong>{item.name}</strong>
-                <span>₹{item.price}</span>
-              </div>
-              <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
-                {who.length > 0 ? `${who.join(', ')} — ₹${share} each` : 'Nobody picked this'}
-              </div>
-            </div>
-          )
-        })}
+        {OwesAndBreakdown(summary)}
       </div>
     )
   }
 
   if (!nameConfirmed) {
     return (
-      <div style={{ padding: '2rem', maxWidth: '400px', margin: '0 auto' }}>
+      <div className="page-narrow">
         <h2>{split.name}</h2>
-        <p>Created by {split.created_by}</p>
+        <p className="muted" style={{ margin: '0.5rem 0 1.5rem' }}>Created by {split.created_by}</p>
         <input
+          className="input"
           placeholder="Enter your name"
           value={userName}
           onChange={e => setUserName(e.target.value)}
-          style={{ padding: '0.5rem', width: '100%', marginBottom: '1rem' }}
+          onKeyDown={e => e.key === 'Enter' && userName && (sessionStorage.setItem(`name-${id}`, userName), setNameConfirmed(true))}
         />
-        
         <button
           onClick={() => {
             if (userName) {
-                sessionStorage.setItem(`name-${id}`, userName)
-                setNameConfirmed(true)
+              sessionStorage.setItem(`name-${id}`, userName)
+              setNameConfirmed(true)
             }
           }}
-          style={{ padding: '0.5rem 1.5rem', cursor: 'pointer' }}
+          className="btn btn-primary mt-1"
         >
           Join split
         </button>
@@ -273,126 +294,87 @@ export default function SplitView() {
   }
 
   if (confirmed) {
-  const summary = {}
-  allSelections.forEach(s => {
-    const item = items.find(i => i.id === s.item_id)
-    if (!item) return
-    const pickers = allSelections.filter(x => x.item_id === s.item_id)
-    const share = item.price / pickers.length
-    summary[s.user_name] = (summary[s.user_name] || 0) + share
-  })
+    const summary = {}
+    allSelections.forEach(s => {
+      const item = items.find(i => i.id === s.item_id)
+      if (!item) return
+      const pickers = allSelections.filter(x => x.item_id === s.item_id)
+      summary[s.user_name] = (summary[s.user_name] || 0) + item.price / pickers.length
+    })
 
-  return (
-    <div style={{ padding: '2rem', maxWidth: '500px', margin: '0 auto' }}>
-      <a href={split.group_id ? `/group/${split.group_id}` : '/'} style={{ color: '#888', fontSize: '0.9rem', display: 'inline-block', marginBottom: '1rem' }}>← Back</a>
-      <h2>✓ Selection confirmed</h2>
-      <p style={{ color: '#888', marginTop: '-0.5rem' }}>Created by {split.created_by} · {new Date(split.created_at).toLocaleDateString()}</p>
-      <div style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>
-        Bill total: ₹{items.reduce((sum, item) => sum + Number(item.price), 0).toFixed(2)}
-      </div>
-      <p style={{ color: '#aaa' }}>Waiting for everyone to confirm...</p>
-      <button
-        onClick = {loadSelections}
-        style={{ padding: '0.4rem 1rem', cursor: 'pointer', marginBottom: '1rem' }}
-       >
-        Refresh
-          
-      </button>
-      <button
-        onClick={() => {
-        sessionStorage.removeItem(`confirmed-${id}`)
-        setConfirmed(false)}}
-
-        style={{ padding: '0.5rem 1rem', cursor: 'pointer', marginBottom: '1rem' }}
-        >
-        ← Edit my selection
-      </button>
-
-      {isCreator && (
-        <button
-          onClick={finalizeSplit}
-          style={{ display: 'block', padding: '0.6rem 1.5rem', cursor: 'pointer', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', marginBottom: '1rem', fontWeight: 'bold' }}
-        >
-          🔒 Finalize split (lock for everyone)
-        </button>
-      )}
-
-      <h3 style={{ marginTop: '1.5rem' }}>Live summary</h3>
-      {Object.entries(summary).map(([name, total]) => (
-        <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #333' }}>
-          <span>{name}</span>
-          <strong>₹{total.toFixed(2)}</strong>
+    return (
+      <div className="page" style={{ maxWidth: '480px' }}>
+        <a href={backHref} className="back-link">Back</a>
+        <div className="cluster">
+          <h2>Selection confirmed</h2>
+          <span className="badge" style={{ background: 'var(--success-soft)', color: 'var(--success)' }}>✓</span>
         </div>
-      ))}
+        <p className="card-sub">Created by {split.created_by} · {new Date(split.created_at).toLocaleDateString()}</p>
 
-      <h3 style={{ marginTop: '1.5rem' }}>Item breakdown</h3>
-      {items.map(item => {
-        const who = getItemSelectors(item.id)
-        const share = who.length > 0 ? (item.price / who.length).toFixed(2) : item.price
-        return (
-          <div key={item.id} style={{ marginBottom: '0.75rem', padding: '0.75rem', background: '#c3e3fa', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <strong>{item.name}</strong>
-              <span style={{ color: '#666', fontSize: '0.9rem' }}>x{item.quantity}</span>
-              <span>₹{item.price}</span>
-            </div>
-            <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
-              {who.length > 0 ? `${who.join(', ')} — ₹${share} each` : 'Nobody picked this'}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
+        <div className="amount-hero mt-2">
+          <div className="lbl">Bill total</div>
+          <div className="val">₹{billTotal}</div>
+        </div>
+        <p className="muted mt-1">Waiting for everyone to confirm…</p>
+
+        <div className="cluster mt-1" style={{ flexWrap: 'wrap' }}>
+          <button onClick={loadSelections} className="btn btn-sm">Refresh</button>
+          <button
+            onClick={() => { sessionStorage.removeItem(`confirmed-${id}`); setConfirmed(false) }}
+            className="btn btn-sm"
+          >
+            ← Edit my selection
+          </button>
+        </div>
+
+        {isCreator && (
+          <button onClick={finalizeSplit} className="btn btn-danger btn-block mt-2">
+            🔒 Finalize split (lock for everyone)
+          </button>
+        )}
+
+        {OwesAndBreakdown(summary)}
+      </div>
+    )
+  }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
-      <a href={split.group_id ? `/group/${split.group_id}` : '/'} style={{ color: '#888', fontSize: '0.9rem', display: 'inline-block', marginBottom: '1rem' }}>← Back</a>
+    <div className="page">
+      <a href={backHref} className="back-link">Back</a>
       <h2>{split.name}</h2>
-      <p>Hi {userName}, pick your items:</p>
-      {items.map(item => {
-        const who = getItemSelectors(item.id)
-        return (
-          <div
-            key={item.id}
-            onClick={() => toggleItem(item.id)}
-            style={{
-              padding: '1rem',
-              marginBottom: '0.75rem',
-              borderRadius: '8px',
-              border: selections[item.id] ? '2px solid #22c55e' : '1px solid #ddd',
-              cursor: 'pointer',
-              background: selections[item.id] ? '#f0fdf4' : '#ffffff',
-              color: '#000'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <strong>{item.name}</strong>
-              <span>₹{item.price}</span>
-            </div>
-            <div style={{ fontSize: '0.8rem', color: '#aaa', marginTop: '0.25rem' }}>
-              {who.length > 0 ? `Picked by: ${who.join(', ')}` : 'Nobody picked this yet'}
-            </div>
-          </div>
-        )
-      })}
+      <p className="muted mt-1">Hi {userName}, pick your items:</p>
 
-      <div style={{ marginTop: '1rem', fontSize: '1.1rem' }}>
-        Your total: ₹{getMyTotal()}
+      <div className="mt-1">
+        {items.map(item => {
+          const who = getItemSelectors(item.id)
+          return (
+            <div
+              key={item.id}
+              onClick={() => toggleItem(item.id)}
+              className={`pick ${selections[item.id] ? 'pick-on' : ''}`}
+            >
+              <div className="row">
+                <strong>{item.name}</strong>
+                <span>₹{item.price}</span>
+              </div>
+              <div className="faint" style={{ marginTop: '0.25rem' }}>
+                {who.length > 0 ? `Picked by: ${who.join(', ')}` : 'Nobody picked this yet'}
+              </div>
+            </div>
+          )
+        })}
       </div>
 
-      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-        <button
-          onClick={confirmSelections}
-          style={{ padding: '0.75rem 2rem', fontSize: '1rem', cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px' }}
-        >
+      <div className="row mt-1" style={{ fontSize: '1.1rem', fontWeight: 700 }}>
+        <span>Your total</span>
+        <span>₹{getMyTotal()}</span>
+      </div>
+
+      <div className="cluster mt-2" style={{ flexWrap: 'wrap' }}>
+        <button onClick={confirmSelections} className="btn btn-lg btn-primary">
           Confirm my selection
         </button>
-        <button
-          onClick={markNothing}
-          style={{ padding: '0.75rem 1.5rem', fontSize: '1rem', cursor: 'pointer', background: '#fff', color: '#666', border: '1px solid #ddd', borderRadius: '6px' }}
-        >
+        <button onClick={markNothing} className="btn btn-lg">
           Nothing here is mine
         </button>
       </div>

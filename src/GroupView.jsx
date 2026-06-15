@@ -157,136 +157,122 @@ export default function GroupView() {
     alert(`Invited @${profile.username}`)
   }
 
-  if (authLoading) return <div style={{ padding: '2rem' }}>Loading...</div>
-  if (!user) return <div style={{ padding: '2rem' }}>Please <a href="/">login</a> first.</div>
-  if (!group) return <div style={{ padding: '2rem' }}>Loading group...</div>
+  if (authLoading) return <div className="screen-msg">Loading…</div>
+  if (!user) return <div className="screen-msg">Please <a href="/">login</a> first.</div>
+  if (!group) return <div className="screen-msg">Loading group…</div>
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <a href="/" style={{ color: '#888', fontSize: '0.9rem' }}>← Back to groups</a>
-      </div>
+    <div className="page">
+      <a href="/" className="back-link">Back to groups</a>
 
       <h2>{group.name}</h2>
 
-      <div style={{ marginBottom: '2rem' }}>
-        <h3>Members</h3>
-        {members.map(m => (
-          <div key={m.id} style={{ padding: '0.4rem 0', borderBottom: '1px solid #eee', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between' }}>
-            <span>{m.username ? `@${m.username}` : m.email} {m.user_id === user.id ? '(you)' : ''}</span>
-            {m.status === 'pending' && <span style={{ color: '#f59e0b', fontSize: '0.8rem' }}>⏳ pending</span>}
-          </div>
-        ))}
-
-        <div style={{ marginTop: '1rem' }}>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <input
-              placeholder="Search by username"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && searchUsers()}
-              style={{ flex: 1, padding: '0.5rem' }}
-            />
-            <button onClick={searchUsers} style={{ padding: '0.5rem 1rem', cursor: 'pointer' }}>
-              {searching ? '...' : 'Search'}
-            </button>
-          </div>
-
-          {searchResults.map(p => (
-            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem', marginTop: '0.5rem', border: '1px solid #eee', borderRadius: '6px' }}>
-              <span>@{p.username}</span>
-              <button onClick={() => invite(p)} style={{ padding: '0.3rem 0.75rem', cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '0.85rem' }}>
-                Invite
-              </button>
+      <div className="mt-2">
+        <h3 style={{ marginBottom: '0.6rem' }}>Members</h3>
+        <div className="card">
+          {members.map((m, i) => (
+            <div key={m.id} className="row" style={{ padding: '0.5rem 0', borderTop: i ? '1px solid var(--border)' : 'none' }}>
+              <span>{m.username ? `@${m.username}` : m.email} {m.user_id === user.id ? <span className="faint">(you)</span> : ''}</span>
+              {m.status === 'pending' && <span className="badge badge-warning">⏳ pending</span>}
             </div>
           ))}
-          {searchQuery && !searching && searchResults.length === 0 && (
-            <p style={{ color: '#888', fontSize: '0.85rem', marginTop: '0.5rem' }}>No users found</p>
-          )}
         </div>
 
-        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed #ddd' }}>
+        <div className="cluster mt-1" style={{ alignItems: 'stretch' }}>
+          <input
+            className="input"
+            placeholder="Search by username"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && searchUsers()}
+          />
+          <button onClick={searchUsers} className="btn">
+            {searching ? '…' : 'Search'}
+          </button>
+        </div>
+
+        {searchResults.map(p => (
+          <div key={p.id} className="line mt-1">
+            <span>@{p.username}</span>
+            <button onClick={() => invite(p)} className="btn btn-sm btn-success">Invite</button>
+          </div>
+        ))}
+        {searchQuery && !searching && searchResults.length === 0 && (
+          <p className="faint mt-1">No users found</p>
+        )}
+
+        <div className="mt-2" style={{ paddingTop: '1rem', borderTop: '1px dashed var(--border-strong)' }}>
           <button
             onClick={() => {
               const link = `${window.location.origin}/join/${id}`
               navigator.clipboard.writeText(link)
               alert('Invite link copied! Share it on WhatsApp etc.')
             }}
-            style={{ padding: '0.5rem 1rem', cursor: 'pointer', background: '#f3f4f6', border: '1px solid #ddd', borderRadius: '6px', fontSize: '0.9rem' }}
+            className="btn btn-sm"
           >
             🔗 Copy invite link
           </button>
-          <p style={{ color: '#aaa', fontSize: '0.75rem', marginTop: '0.4rem' }}>
+          <p className="faint" style={{ marginTop: '0.4rem' }}>
             Anyone with this link can join the group.
           </p>
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+      <div className="section-head">
         <h3 style={{ margin: 0 }}>Splits</h3>
-        <button
-          onClick={() => window.location.href = `/?group=${id}`}
-          style={{ padding: '0.5rem 1rem', cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px' }}
-        >
+        <button onClick={() => window.location.href = `/?group=${id}`} className="btn btn-sm btn-primary">
           + New split
         </button>
       </div>
 
-      {splits.length === 0 && <p style={{ color: '#888' }}>No splits yet. Create one!</p>}
+      {splits.length === 0 && <p className="muted">No splits yet. Create one!</p>}
 
       {splits.map(split => (
-        <div
-          key={split.id}
-          onClick={() => window.location.href = `/split/${split.id}`}
-          style={{ padding: '1rem', marginBottom: '0.75rem', border: '1px solid #ddd', borderRadius: '8px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-        >
-          <div>
-            <strong>{split.name}</strong>
-            {actionSplits.has(split.id) && (
-              <span style={{ background: '#ef4444', color: '#fff', fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '10px', marginLeft: '0.5rem', whiteSpace: 'nowrap' }}>
-                Action required
-              </span>
+        <div key={split.id} onClick={() => window.location.href = `/split/${split.id}`} className="card card-tap">
+          <div className="row">
+            <div>
+              <div className="cluster">
+                <span className="card-title">{split.name}</span>
+                {actionSplits.has(split.id) && (
+                  <span className="badge badge-danger">● Action required</span>
+                )}
+              </div>
+              <div className="card-sub">
+                By {split.created_by} · {new Date(split.created_at).toLocaleDateString()}
+              </div>
+            </div>
+
+            {split.created_by === user.email && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    setOpenMenuId(openMenuId === split.id ? null : split.id)
+                  }}
+                  className="btn-ghost"
+                  style={{ fontSize: '1.3rem', lineHeight: 1, padding: '0.1rem 0.5rem', cursor: 'pointer', background: 'none', border: 'none' }}
+                >
+                  ⋮
+                </button>
+
+                {openMenuId === split.id && (
+                  <div className="menu">
+                    <button
+                      onClick={e => { setOpenMenuId(null); deleteSplit(split.id, e) }}
+                      className="menu-item menu-item-danger"
+                    >
+                      🗑 Delete
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
-            <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>
-              By {split.created_by} · {new Date(split.created_at).toLocaleDateString()}
-            </div>
           </div>
-
-          {split.created_by === user.email && (
-            <div style={{ position: 'relative' }}>
-              <button
-                onClick={e => {
-                  e.stopPropagation()
-                  setOpenMenuId(openMenuId === split.id ? null : split.id)
-                }}
-                style={{ padding: '0.25rem 0.6rem', cursor: 'pointer', background: 'transparent', border: 'none', fontSize: '1.3rem', lineHeight: 1, color: '#666' }}
-              >
-                ⋮
-              </button>
-
-              {openMenuId === split.id && (
-                <div style={{ position: 'absolute', right: 0, top: '100%', background: '#fff', border: '1px solid #ddd', borderRadius: '6px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', zIndex: 10, minWidth: '120px' }}>
-                  <button
-                    onClick={e => {
-                      setOpenMenuId(null)
-                      deleteSplit(split.id, e)
-                    }}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.6rem 1rem', cursor: 'pointer', background: 'transparent', border: 'none', color: '#ef4444', fontSize: '0.9rem' }}
-                  >
-                    🗑 Delete
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       ))}
 
-      <div style={{ marginTop: '3rem', paddingTop: '1.5rem', borderTop: '1px solid #eee' }}>
-        <button
-          onClick={leaveGroup}
-          style={{ padding: '0.5rem 1.25rem', cursor: 'pointer', background: '#fff', color: '#ef4444', border: '1px solid #ef4444', borderRadius: '6px', fontSize: '0.9rem' }}
-        >
+      <div className="mt-2" style={{ marginTop: '3rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
+        <button onClick={leaveGroup} className="btn btn-sm btn-danger-outline">
           Leave group
         </button>
       </div>

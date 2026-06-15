@@ -112,88 +112,75 @@ export default function Home({ user, profile }) {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Smart Splitter</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <span style={{ fontSize: '0.85rem', color: '#888' }}>{user.email}</span>
-          <button onClick={logout} style={{ padding: '0.4rem 0.75rem', cursor: 'pointer' }}>Logout</button>
+    <div className="page">
+      <div className="topbar">
+        <h1 style={{ fontSize: '1.5rem' }}>🧾 Smart Splitter</h1>
+        <div className="cluster">
+          <span className="faint">@{profile?.username}</span>
+          <button onClick={logout} className="btn btn-sm">Logout</button>
         </div>
       </div>
 
       {invites.length > 0 && (
-        <div style={{ marginBottom: '2rem' }}>
-          <h2 style={{ margin: '0 0 1rem' }}>Pending invites</h2>
+        <div className="mt-2">
+          <h2 style={{ marginBottom: '0.9rem' }}>Pending invites</h2>
           {invites.map(inv => (
-            <div key={inv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', marginBottom: '0.75rem', border: '1px solid #f59e0b', borderRadius: '8px', background: '#fffbeb' }}>
-              <div>
-                <strong>{inv.groups.name}</strong>
-                <div style={{ fontSize: '0.8rem', color: '#888' }}>You've been invited</div>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button
-                  onClick={() => acceptInvite(inv.id)}
-                  style={{ padding: '0.4rem 1rem', cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px' }}
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={() => declineInvite(inv.id)}
-                  style={{ padding: '0.4rem 1rem', cursor: 'pointer', background: '#fff', color: '#ef4444', border: '1px solid #ef4444', borderRadius: '6px' }}
-                >
-                  Decline
-                </button>
+            <div key={inv.id} className="card" style={{ borderColor: 'var(--warning)', background: 'var(--warning-soft)' }}>
+              <div className="row">
+                <div>
+                  <div className="card-title">{inv.groups.name}</div>
+                  <div className="card-sub">You've been invited</div>
+                </div>
+                <div className="cluster">
+                  <button onClick={() => acceptInvite(inv.id)} className="btn btn-sm btn-success">Accept</button>
+                  <button onClick={() => declineInvite(inv.id)} className="btn btn-sm btn-danger-outline">Decline</button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+      <div className="section-head">
         <h2 style={{ margin: 0 }}>Your groups</h2>
-        <button
-          onClick={() => setShowCreate(!showCreate)}
-          style={{ padding: '0.5rem 1rem', cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px' }}
-        >
+        <button onClick={() => setShowCreate(!showCreate)} className="btn btn-sm btn-primary">
           + Create group
         </button>
       </div>
 
       {showCreate && (
-        <div style={{ marginBottom: '1.5rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '8px' }}>
+        <div className="card">
           <input
+            className="input"
             placeholder="Group name (e.g. Roommates, Goa trip)"
             value={groupName}
             onChange={e => setGroupName(e.target.value)}
-            style={{ width: '100%', padding: '0.5rem', marginBottom: '0.75rem', boxSizing: 'border-box' }}
+            onKeyDown={e => e.key === 'Enter' && createGroup()}
           />
-          <button
-            onClick={createGroup}
-            style={{ padding: '0.5rem 1.5rem', cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px' }}
-          >
-            Create
-          </button>
+          <button onClick={createGroup} className="btn btn-primary mt-1">Create</button>
         </div>
       )}
 
       {groups.length === 0 && (
-        <p style={{ color: '#888' }}>No groups yet. Create one and invite your friends.</p>
+        <p className="muted">No groups yet. Create one and invite your friends.</p>
       )}
 
       {groups.map(group => (
-        <div
-          key={group.id}
-          onClick={() => navigate(`/group/${group.id}`)}
-          style={{ padding: '1rem', marginBottom: '0.75rem', border: '1px solid #ddd', borderRadius: '8px', cursor: 'pointer' }}
-        >
-          <strong>{group.name}</strong>
-          {actionGroups.has(group.id) && (
-            <span style={{ background: '#ef4444', color: '#fff', fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '10px', marginLeft: '0.5rem', whiteSpace: 'nowrap' }}>
-              Action required
-            </span>
-          )}
-          <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.25rem' }}>
-            {group.created_by === user.id ? 'Created by you' : 'Member'}
+        <div key={group.id} onClick={() => navigate(`/group/${group.id}`)} className="card card-tap">
+          <div className="cluster">
+            <div className="avatar">{group.name.trim().charAt(0).toUpperCase()}</div>
+            <div style={{ flex: 1 }}>
+              <div className="cluster">
+                <span className="card-title">{group.name}</span>
+                {actionGroups.has(group.id) && (
+                  <span className="badge badge-danger">Action required</span>
+                )}
+              </div>
+              <div className="card-sub">
+                {group.created_by === user.id ? 'Created by you' : 'Member'}
+              </div>
+            </div>
+            <span className="faint" style={{ fontSize: '1.3rem' }}>›</span>
           </div>
         </div>
       ))}

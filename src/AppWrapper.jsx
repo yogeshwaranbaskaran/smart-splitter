@@ -40,7 +40,7 @@ export default function AppWrapper() {
     return () => subscription.unsubscribe()
   }, [])
 
-  if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>
+  if (loading) return <div className="screen-msg">Loading…</div>
 
   // not logged in
   if (!user) {

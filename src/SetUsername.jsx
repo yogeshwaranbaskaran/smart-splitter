@@ -47,24 +47,23 @@ export default function SetUsername({ user, onDone }) {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '400px', margin: '4rem auto' }}>
+    <div className="page-narrow">
       <h2>Pick a username</h2>
-      <p style={{ color: '#888', marginBottom: '1.5rem' }}>
+      <p className="muted" style={{ margin: '0.5rem 0 1.5rem' }}>
         Friends use this to find and invite you.
       </p>
-      <input
-        placeholder="e.g. yogesh_b"
-        value={username}
-        onChange={e => setUsername(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && save()}
-        style={{ width: '100%', padding: '0.6rem', marginBottom: '0.75rem', boxSizing: 'border-box' }}
-      />
-      {error && <p style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: '0.75rem' }}>{error}</p>}
-      <button
-        onClick={save}
-        disabled={saving}
-        style={{ padding: '0.6rem 1.5rem', cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px' }}
-      >
+      <div className="cluster" style={{ alignItems: 'stretch' }}>
+        <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-faint)' }}>@</span>
+        <input
+          className="input"
+          placeholder="yogesh_b"
+          value={username}
+          onChange={e => setUsername(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && save()}
+        />
+      </div>
+      {error && <p style={{ color: 'var(--danger)', fontSize: '0.85rem', margin: '0.6rem 0 0' }}>{error}</p>}
+      <button onClick={save} disabled={saving} className="btn btn-primary mt-2">
         {saving ? 'Saving...' : 'Continue'}
       </button>
     </div>

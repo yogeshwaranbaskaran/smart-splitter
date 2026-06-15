@@ -28,3 +28,6 @@ Github Token.txt
 *.sln
 *.sw?
 .vercel
+
+# vite cache
+.vite

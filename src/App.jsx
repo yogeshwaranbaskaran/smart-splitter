@@ -37,7 +37,6 @@ export default function App({ user, groupId, profile }) {
   }
 
   async function createSplit() {
-    
     if (!splitName || !creatorName) {
       alert('Enter your name and a split name')
       return
@@ -49,10 +48,10 @@ export default function App({ user, groupId, profile }) {
 
     const { data: split, error } = await supabase
       .from('splits')
-      .insert({ 
-        name: splitName, 
+      .insert({
+        name: splitName,
         created_by: user ? user.email : creatorName,
-        group_id: groupId || null 
+        group_id: groupId || null
       })
       .select()
       .single()
@@ -82,23 +81,20 @@ export default function App({ user, groupId, profile }) {
 
   if (groupId && mode === null) {
     return (
-      <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
-        <h1>New split</h1>
-        <p style={{ color: '#888' }}>How do you want to split?</p>
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-          <button
-            onClick={() => setMode('scan')}
-            style={{ flex: 1, padding: '2rem 1rem', cursor: 'pointer', background: '#fff', border: '2px solid #ddd', borderRadius: '12px', fontSize: '1rem' }}
-          >
-            📷<br />Scan a bill
-            <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.5rem' }}>Friends pick their own items</div>
+      <div className="page">
+        <a href={`/group/${groupId}`} className="back-link">Back</a>
+        <h2>New split</h2>
+        <p className="muted">How do you want to split?</p>
+        <div className="tiles">
+          <button onClick={() => setMode('scan')} className="tile">
+            <div className="tile-emoji">📷</div>
+            <div className="tile-title">Scan a bill</div>
+            <div className="tile-sub">Friends pick their own items</div>
           </button>
-          <button
-            onClick={() => setMode('manual')}
-            style={{ flex: 1, padding: '2rem 1rem', cursor: 'pointer', background: '#fff', border: '2px solid #ddd', borderRadius: '12px', fontSize: '1rem' }}
-          >
-            ✍️<br />Split manually
-            <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.5rem' }}>Enter a total, split evenly or unevenly</div>
+          <button onClick={() => setMode('manual')} className="tile">
+            <div className="tile-emoji">✍️</div>
+            <div className="tile-title">Split manually</div>
+            <div className="tile-sub">Enter a total, split evenly or unevenly</div>
           </button>
         </div>
       </div>
@@ -110,127 +106,107 @@ export default function App({ user, groupId, profile }) {
   }
 
   if (splitCreated) {
-  const link = `${window.location.origin}/split/${splitCreated.id}`
-  return (
-    <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
-      <h2>Split created!</h2>
-      <p>Share this link with your friends:</p>
-      <div style={{ background: '#c3e3fa', padding: '1rem', borderRadius: '8px', wordBreak: 'break-all' }}>
-        {link}
-      </div>
-      <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-        <button
-          onClick={() => setSplitCreated(null)}
-          style={{ padding: '0.5rem 1rem', cursor: 'pointer' }}
-        >
-        ← Edit split
-        </button>
+    const link = `${window.location.origin}/split/${splitCreated.id}`
+    return (
+      <div className="page">
+        <h2>Split created! 🎉</h2>
+        <p className="muted mt-1">Share this link with your friends:</p>
+        <div className="line" style={{ wordBreak: 'break-all', display: 'block', background: 'var(--accent-soft)', borderColor: 'var(--accent-line)' }}>
+          {link}
+        </div>
+        <div className="cluster mt-2" style={{ flexWrap: 'wrap' }}>
+          <button onClick={() => setSplitCreated(null)} className="btn">← Edit split</button>
+          <button onClick={() => navigator.clipboard.writeText(link)} className="btn">Copy link</button>
           <button
-            onClick={() => navigator.clipboard.writeText(link)}
-          style={{ padding: '0.5rem 1rem', cursor: 'pointer' }}
-        >
-          Copy link
-        </button>
-        <button
-          onClick={() => {
-          navigator.clipboard.writeText(link)
-          window.open(`/split/${splitCreated.id}?creator=${encodeURIComponent(creatorName)}`, '_blank')}}
-          style={{ padding: '0.5rem 1.5rem', cursor: 'pointer', background: '#4ade80', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 'bold' }}
-        >
-          Next → Make my selections
-        </button>
+            onClick={() => {
+              navigator.clipboard.writeText(link)
+              window.open(`/split/${splitCreated.id}?creator=${encodeURIComponent(creatorName)}`, '_blank')
+            }}
+            className="btn btn-primary"
+          >
+            Next → Make my selections
+          </button>
+        </div>
       </div>
-    </div>
-  )
-}
+    )
+  }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
-      <h1>Smart Splitter</h1>
+    <div className="page">
+      {groupId && (
+        <button onClick={() => setMode(null)} className="back-link">Back</button>
+      )}
+      <h2>{groupId ? 'Scan a bill' : 'Smart Splitter'}</h2>
 
-      <div style={{ marginBottom: '1rem' }}>
+      <div className="mt-2">
         <input
+          className="input field"
           placeholder="Your name"
           value={creatorName}
           onChange={e => setCreatorName(e.target.value)}
-          style={{ padding: '0.5rem', marginRight: '1rem', width: '180px' }}
         />
         <input
+          className="input field"
           placeholder="Split name (e.g. Goa trip)"
           value={splitName}
           onChange={e => setSplitName(e.target.value)}
-          style={{ padding: '0.5rem', width: '220px' }}
         />
       </div>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <input type="file" accept="image/*" onChange={handleUpload} />
+      <div className="dropzone">
+        <div style={{ fontSize: '2.2rem' }}>🧾</div>
+        <div className="muted mt-1">Add your bill — snap it or pick a photo</div>
+        <div className="cluster mt-1" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
+          <label className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+            📷 Take photo
+            <input type="file" accept="image/*" capture="environment" onChange={handleUpload} style={{ display: 'none' }} />
+          </label>
+          <label className="btn btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+            🖼️ Choose file
+            <input type="file" accept="image/*" onChange={handleUpload} style={{ display: 'none' }} />
+          </label>
+        </div>
       </div>
 
-      {loading && <p>Reading bill...</p>}
+      {loading && <p className="muted">Reading bill…</p>}
 
       {items.length > 0 && (
-        <div>
-          <h3>Items found</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left', padding: '0.5rem' }}>Item</th>
-                <th style={{ padding: '0.5rem' }}>Qty</th>
-                <th style={{ padding: '0.5rem' }}>Price</th>
-                <th style={{ padding: '0.5rem' }}>Tax</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, i) => (
-                <tr key={i} style={{ borderTop: '1px solid #333' }}>
-                  <td style={{ padding: '0.5rem' }}>
-                    <input
-                      value={item.name}
-                      onChange={e => updateItem(i, 'name', e.target.value)}
-                      style={{ width: '100%', padding: '0.25rem' }}
-                    />
-                  </td>
-                  <td style={{ padding: '0.5rem' }}>
-                    <input
-                      type="number"
-                      value={item.quantity}
-                      onChange={e => updateItem(i, 'quantity', e.target.value)}
-                      style={{ width: '60px', padding: '0.25rem' }}
-                    />
-                  </td>
-                  <td style={{ padding: '0.5rem' }}>
-                    <input
-                      type="number"
-                      value={item.price}
-                      onChange={e => updateItem(i, 'price', e.target.value)}
-                      style={{ width: '80px', padding: '0.25rem' }}
-                    />
-                  </td>
-                  <td style={{ padding: '0.5rem', fontSize: '0.8rem', color: '#888' }}>
-                    {item.tax_rate > 0
-                      ? `${item.tax_rate}% ${item.tax_included ? '(incl)' : '(added)'}`
-                      : 'no tax'}
-                  </td>
-                  <td style={{ padding: '0.5rem' }}>
-                    <button onClick={() => removeItem(i)}>✕</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{ marginTop: '1rem', fontSize: '1.1rem', fontWeight: 'bold' }}>
-            Total: ₹{items.reduce((sum, item) => sum + Number(item.price), 0).toFixed(2)}
+        <div className="mt-2">
+          <h3 style={{ marginBottom: '0.6rem' }}>Items found</h3>
+          {items.map((item, i) => (
+            <div key={i} className="card" style={{ padding: '0.8rem 1rem' }}>
+              <div className="cluster" style={{ alignItems: 'stretch' }}>
+                <input
+                  className="input"
+                  value={item.name}
+                  onChange={e => updateItem(i, 'name', e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button onClick={() => removeItem(i)} className="btn-ghost" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
+              </div>
+              <div className="cluster mt-1">
+                <label className="faint">Qty
+                  <input type="number" value={item.quantity} onChange={e => updateItem(i, 'quantity', e.target.value)} className="input" style={{ width: '64px', marginLeft: '0.4rem' }} />
+                </label>
+                <label className="faint">Price ₹
+                  <input type="number" value={item.price} onChange={e => updateItem(i, 'price', e.target.value)} className="input" style={{ width: '90px', marginLeft: '0.4rem' }} />
+                </label>
+                <span className="faint" style={{ marginLeft: 'auto' }}>
+                  {item.tax_rate > 0
+                    ? `${item.tax_rate}% ${item.tax_included ? '(incl)' : '(added)'}`
+                    : 'no tax'}
+                </span>
+              </div>
+            </div>
+          ))}
+          <div className="row mt-1" style={{ fontSize: '1.1rem', fontWeight: 700 }}>
+            <span>Total</span>
+            <span>₹{items.reduce((sum, item) => sum + Number(item.price), 0).toFixed(2)}</span>
           </div>
-          <button
-            onClick={createSplit}
-            style={{ marginTop: '1.5rem', padding: '0.75rem 2rem', fontSize: '1rem', cursor: 'pointer' }}
-          >
+          <button onClick={createSplit} className="btn btn-lg btn-primary mt-2">
             Create split
           </button>
         </div>
-
       )}
     </div>
   )

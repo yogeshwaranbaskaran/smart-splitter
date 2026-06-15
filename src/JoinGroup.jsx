@@ -78,19 +78,16 @@ export default function JoinGroup() {
     navigate(`/group/${id}`)
   }
 
-  if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>
-  if (!group) return <div style={{ padding: '2rem' }}>This group link is invalid or no longer exists.</div>
+  if (loading) return <div className="screen-msg">Loading…</div>
+  if (!group) return <div className="screen-msg">This group link is invalid or no longer exists.</div>
 
   // not logged in → log in first (comes back here after)
   if (!user) {
     return (
-      <div style={{ padding: '2rem', maxWidth: '400px', margin: '4rem auto', textAlign: 'center' }}>
+      <div className="page-narrow center">
         <h2>Join “{group.name}”</h2>
-        <p style={{ color: '#888', marginBottom: '1.5rem' }}>Log in to join this group.</p>
-        <button
-          onClick={loginWithGoogle}
-          style={{ padding: '0.75rem 2rem', fontSize: '1rem', cursor: 'pointer', background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }}
-        >
+        <p className="muted" style={{ margin: '0.5rem 0 1.5rem' }}>Log in to join this group.</p>
+        <button onClick={loginWithGoogle} className="btn btn-lg">
           Sign in with Google
         </button>
       </div>
@@ -109,22 +106,15 @@ export default function JoinGroup() {
 
   // logged in + has username → one-confirm join
   return (
-    <div style={{ padding: '2rem', maxWidth: '400px', margin: '4rem auto', textAlign: 'center' }}>
+    <div className="page-narrow center">
       <h2>Join “{group.name}”?</h2>
-      <p style={{ color: '#888', marginBottom: '1.5rem' }}>You'll be added as a member.</p>
-      <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-        <button
-          onClick={() => navigate('/')}
-          style={{ padding: '0.6rem 1.5rem', cursor: 'pointer', background: '#fff', border: '1px solid #ddd', borderRadius: '6px' }}
-        >
+      <p className="muted" style={{ margin: '0.5rem 0 1.5rem' }}>You'll be added as a member.</p>
+      <div className="cluster" style={{ justifyContent: 'center' }}>
+        <button onClick={() => navigate('/')} className="btn">
           Cancel
         </button>
-        <button
-          onClick={joinGroup}
-          disabled={joining}
-          style={{ padding: '0.6rem 1.5rem', cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold' }}
-        >
-          {joining ? 'Joining...' : 'Join group'}
+        <button onClick={joinGroup} disabled={joining} className="btn btn-primary">
+          {joining ? 'Joining…' : 'Join group'}
         </button>
       </div>
     </div>

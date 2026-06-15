@@ -11,43 +11,22 @@ export default function Auth({ onGuest }) {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '400px', margin: '4rem auto', textAlign: 'center' }}>
-      <h1>Smart Splitter</h1>
-      <p style={{ color: '#888', marginBottom: '2rem' }}>Split bills with your friends easily</p>
-      <button
-        onClick={loginWithGoogle}
-        style={{
-          padding: '0.75rem 2rem',
-          fontSize: '1rem',
-          cursor: 'pointer',
-          background: '#fff',
-          border: '1px solid #ddd',
-          borderRadius: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
-          margin: '0 auto'
-        }}
-      >
+    <div className="page-narrow center">
+      <div className="hero">
+        <div className="hero-emoji">🧾</div>
+        <h1>Smart Splitter</h1>
+        <p className="hero-sub">Split bills, stay friends.</p>
+      </div>
+
+      <button onClick={loginWithGoogle} className="btn btn-lg btn-block">
         Sign in with Google
       </button>
 
-      <div style={{ marginTop: '1.5rem' }}>
-        <button
-          onClick={onGuest}
-          style={{
-            padding: '0.5rem 1rem',
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-            background: 'transparent',
-            border: 'none',
-            color: '#888',
-            textDecoration: 'underline'
-          }}
-        >
+      <div className="mt-2">
+        <button onClick={onGuest} className="btn-ghost" style={{ background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
           Continue as guest
         </button>
-        <p style={{ color: '#aaa', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+        <p className="faint" style={{ marginTop: '0.5rem' }}>
           Guests can scan bills and create a split, but can't use groups or invite friends.
         </p>
       </div>

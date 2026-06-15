@@ -96,7 +96,7 @@ Create a `.env` file in the project root with your Gemini key:
 VITE_GEMINI_API_KEY=your_gemini_api_key
 ```
 
-> Supabase connection details currently live in [`src/supabase.js`](./src/supabase.js). Drop in your own project URL and **anon** key there. (The anon key is safe to expose client-side — access is governed by Row Level Security — but moving it to an env var is on the roadmap; see below.)
+> Supabase connection details currently live in [`src/supabase.js`](./src/supabase.js). Drop in your own project URL and **anon** key there. (The anon key is safe to expose client-side — access is governed by Row Level Security — but moving it to an env var is a planned improvement.)
 
 Then start the dev server:
 
@@ -114,12 +114,6 @@ The longer-term goal is to grow this from "split a bill" into a small personal-f
 - 🔜 **Expenses** — auto-import from past splits plus parsed transaction emails/messages, with one-tap confirmation instead of manual entry.
 - 🔜 **Wallet** — a single view of accounts, cards, cash, and who-owes-who across friends.
 
-Other planned work:
-
-- [ ] Move the Supabase config out of source and into environment variables
-- [ ] Tighten Row Level Security with proper per-user policies
-- [ ] Automated tests around the tax-reconciliation logic
-- [x] **UI overhaul** — done: custom design system, animations, mobile-first polish
 
 Splitwise tracks social splits but not your overall spending; budgeting apps do the reverse. The aim is to do both in one place.
 
@@ -127,12 +121,6 @@ Splitwise tracks social splits but not your overall spending; budgeting apps do 
 
 I built this with AI coding assistants (LLMs) as a pair-programmer — for writing code, debugging, and learning as I went. What I owned myself: the product and architecture decisions, wiring the pieces together, fixing what broke, and every deployment. I'm doing this to genuinely understand how a full-stack app is built end to end, not to claim I typed every line from scratch. Being upfront about that matters to me.
 
-## 📚 What I learned / would do differently
-
-- **AI is a component, not the whole system.** The most useful thing I figured out was *where* to draw the line — let the model do the fuzzy reading, but never let it own the numbers. That single boundary is what makes the splits trustworthy.
-- **Realtime is a database feature, not an infrastructure project.** Leaning on Supabase subscriptions instead of building my own sync layer saved a huge amount of code, and it's the kind of leverage I'd reach for again.
-- **A design system pays for itself fast.** Defining colors, spacing, and components once meant I could restyle or re-theme the entire app from a handful of values — far faster than hand-styling every screen.
-- **What I'd change:** lift the Supabase config into env vars from the start, tighten Row Level Security with proper per-user policies, and add automated tests around the tax-reconciliation logic (it's the riskiest piece of code and currently only manually verified).
 
 ---
 

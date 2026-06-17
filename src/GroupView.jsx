@@ -15,6 +15,7 @@ export default function GroupView() {
   const [openMenuId, setOpenMenuId] = useState(null)
   const [myUsername, setMyUsername] = useState(null)
   const [actionSplits, setActionSplits] = useState(new Set())
+  const [creatorNames, setCreatorNames] = useState({}) // email -> @username
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -95,6 +96,18 @@ export default function GroupView() {
       .eq('group_id', id)
       .order('created_at', { ascending: false })
     setSplits(data || [])
+
+    // created_by stores emails — map each distinct creator email to their @username
+    const emails = [...new Set((data || []).map(s => s.created_by).filter(Boolean))]
+    if (emails.length) {
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('email, username')
+        .in('email', emails)
+      const map = {}
+      ;(profs || []).forEach(p => { if (p.username) map[p.email] = `@${p.username}` })
+      setCreatorNames(map)
+    }
   }
 
   async function leaveGroup() {
@@ -238,7 +251,7 @@ export default function GroupView() {
                 )}
               </div>
               <div className="card-sub">
-                By {split.created_by} · {new Date(split.created_at).toLocaleDateString()}
+                By {creatorNames[split.created_by] || split.created_by} · {new Date(split.created_at).toLocaleDateString()}
               </div>
             </div>
 

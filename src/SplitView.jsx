@@ -14,6 +14,7 @@ export default function SplitView() {
   const [confirmed, setConfirmed] = useState(() => !!sessionStorage.getItem(`confirmed-${id}`))
   const [allSelections, setAllSelections] = useState([])
   const [currentEmail, setCurrentEmail] = useState(null)
+  const [creatorName, setCreatorName] = useState(null)
 
   useEffect(() => {
     if (creatorFromUrl) {
@@ -80,6 +81,16 @@ export default function SplitView() {
 
     setSplit(splitData)
     setItems(itemsData || [])
+
+    // created_by stores an email — look up the creator's @username to show instead
+    if (splitData?.created_by) {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('email', splitData.created_by)
+        .maybeSingle()
+      setCreatorName(prof?.username ? `@${prof.username}` : splitData.created_by)
+    }
   }
 
   async function loadSelections() {
@@ -168,6 +179,9 @@ export default function SplitView() {
 
   if (!split) return <div className="screen-msg">Loading…</div>
 
+  // show @username if we resolved it, else fall back to the raw created_by email
+  const creatorLabel = creatorName || split.created_by
+
   // manual (GPay-style) splits: just show who owes what, read-only
   if (split.split_type === 'manual') {
     const total = allSelections.reduce((sum, s) => sum + Number(s.share), 0)
@@ -175,7 +189,7 @@ export default function SplitView() {
       <div className="page" style={{ maxWidth: '480px' }}>
         <a href={backHref} className="back-link">Back</a>
         <h2>{split.name}</h2>
-        <p className="card-sub">Created by {split.created_by} · {new Date(split.created_at).toLocaleDateString()}</p>
+        <p className="card-sub">Created by {creatorLabel} · {new Date(split.created_at).toLocaleDateString()}</p>
 
         <div className="amount-hero mt-2">
           <div className="lbl">Total</div>
@@ -250,7 +264,7 @@ export default function SplitView() {
           <h2>{split.name}</h2>
           <span className="badge badge-muted">🔒 Final</span>
         </div>
-        <p className="card-sub">Created by {split.created_by} · {new Date(split.created_at).toLocaleDateString()}</p>
+        <p className="card-sub">Created by {creatorLabel} · {new Date(split.created_at).toLocaleDateString()}</p>
         <p className="muted mt-1">This split is finalized. Selections are locked.</p>
         {isCreator && (
           <button onClick={unfinalizeSplit} className="btn btn-sm mt-1" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>
@@ -270,7 +284,7 @@ export default function SplitView() {
     return (
       <div className="page-narrow">
         <h2>{split.name}</h2>
-        <p className="muted" style={{ margin: '0.5rem 0 1.5rem' }}>Created by {split.created_by}</p>
+        <p className="muted" style={{ margin: '0.5rem 0 1.5rem' }}>Created by {creatorLabel}</p>
         <input
           className="input"
           placeholder="Enter your name"
@@ -309,7 +323,7 @@ export default function SplitView() {
           <h2>Selection confirmed</h2>
           <span className="badge" style={{ background: 'var(--success-soft)', color: 'var(--success)' }}>✓</span>
         </div>
-        <p className="card-sub">Created by {split.created_by} · {new Date(split.created_at).toLocaleDateString()}</p>
+        <p className="card-sub">Created by {creatorLabel} · {new Date(split.created_at).toLocaleDateString()}</p>
 
         <div className="amount-hero mt-2">
           <div className="lbl">Bill total</div>

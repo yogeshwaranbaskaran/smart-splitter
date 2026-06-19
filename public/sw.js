@@ -1,6 +1,6 @@
 // Smart Splitter service worker — makes the app installable + work offline.
 // Bump CACHE when you want to force-clear old cached assets on next visit.
-const CACHE = 'smart-splitter-v1'
+const CACHE = 'smart-splitter-v2'
 
 // Activate immediately on install, don't wait for old tabs to close.
 self.addEventListener('install', () => self.skipWaiting())

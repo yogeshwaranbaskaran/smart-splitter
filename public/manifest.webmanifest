@@ -1,6 +1,6 @@
 {
   "name": "Smart Splitter",
-  "short_name": "Splitter",
+  "short_name": "Smart Splitter",
   "description": "Snap a bill, split it with friends, and see who owes what.",
   "start_url": "/",
   "scope": "/",

@@ -16,6 +16,8 @@ export default function GroupView() {
   const [myUsername, setMyUsername] = useState(null)
   const [actionSplits, setActionSplits] = useState(new Set())
   const [creatorNames, setCreatorNames] = useState({}) // email -> @username
+  const [editingName, setEditingName] = useState(false) // group-name inline edit
+  const [nameInput, setNameInput] = useState('')
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -170,6 +172,27 @@ export default function GroupView() {
     alert(`Invited @${profile.username}`)
   }
 
+  // rename a split — creator only (the ⋮ menu is already creator-gated)
+  async function renameSplit(split, e) {
+    e.stopPropagation()
+    setOpenMenuId(null)
+    const next = window.prompt('Rename split', split.name)?.trim()
+    if (!next || next === split.name) return
+    const { error } = await supabase.from('splits').update({ name: next }).eq('id', split.id)
+    if (error) { alert('Could not rename: ' + error.message); return }
+    loadSplits()
+  }
+
+  // rename the group — ANY member can do this (user's call)
+  async function saveGroupName() {
+    const next = nameInput.trim()
+    setEditingName(false)
+    if (!next || next === group.name) return
+    const { error } = await supabase.from('groups').update({ name: next }).eq('id', id)
+    if (error) { alert('Could not rename group: ' + error.message); return }
+    setGroup(prev => ({ ...prev, name: next }))
+  }
+
   if (authLoading) return <div className="screen-msg">Loading…</div>
   if (!user) return <div className="screen-msg">Please <a href="/">login</a> first.</div>
   if (!group) return <div className="screen-msg">Loading group…</div>
@@ -178,7 +201,37 @@ export default function GroupView() {
     <div className="page">
       <a href="/" className="back-link">Back to groups</a>
 
-      <h2>{group.name}</h2>
+      {editingName ? (
+        <div className="cluster mt-1" style={{ alignItems: 'stretch' }}>
+          <input
+            className="input"
+            autoFocus
+            value={nameInput}
+            onChange={e => setNameInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') saveGroupName(); if (e.key === 'Escape') setEditingName(false) }}
+          />
+          <button onClick={saveGroupName} className="btn btn-sm btn-primary">Save</button>
+          <button onClick={() => setEditingName(false)} className="btn btn-sm">Cancel</button>
+        </div>
+      ) : (
+        <div className="cluster">
+          <h2 style={{ margin: 0 }}>{group.name}</h2>
+          <button
+            onClick={() => { setNameInput(group.name); setEditingName(true) }}
+            title="Rename group"
+            aria-label="Rename group"
+            style={{
+              width: '32px', height: '32px', flexShrink: 0,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--accent-soft)', color: 'var(--accent)',
+              border: 'none', borderRadius: 'var(--radius-pill)',
+              fontSize: '0.9rem', cursor: 'pointer'
+            }}
+          >
+            ✏️
+          </button>
+        </div>
+      )}
 
       <div className="mt-2">
         <h3 style={{ marginBottom: '0.6rem' }}>Members</h3>
@@ -270,6 +323,12 @@ export default function GroupView() {
 
                 {openMenuId === split.id && (
                   <div className="menu">
+                    <button
+                      onClick={e => renameSplit(split, e)}
+                      className="menu-item"
+                    >
+                      ✏️ Rename
+                    </button>
                     <button
                       onClick={e => { setOpenMenuId(null); deleteSplit(split.id, e) }}
                       className="menu-item menu-item-danger"

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabase'
+import { CURRENCIES } from './currency'
 
 // same rule as SetUsername.jsx: 3-20 chars, lowercase letters, numbers, underscore
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/
@@ -16,6 +17,8 @@ export default function Home({ user, profile }) {
   const [newName, setNewName] = useState('')
   const [unameErr, setUnameErr] = useState('')
   const [savingName, setSavingName] = useState(false)
+  const [currency, setCurrency] = useState(profile?.currency || 'INR') // user's default currency
+  const [profileSection, setProfileSection] = useState(null) // null | 'username' | 'currency'
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -30,7 +33,7 @@ export default function Home({ user, profile }) {
   // close the profile dropdown when clicking anywhere else
   useEffect(() => {
     if (!menuOpen) return
-    const close = () => setMenuOpen(false)
+    const close = () => { setMenuOpen(false); setProfileSection(null) }
     document.addEventListener('click', close)
     return () => document.removeEventListener('click', close)
   }, [menuOpen])
@@ -105,7 +108,7 @@ export default function Home({ user, profile }) {
 
     const { data: group, error } = await supabase
       .from('groups')
-      .insert({ name: groupName, created_by: user.id })
+      .insert({ name: groupName, created_by: user.id, currency })
       .select()
       .single()
 
@@ -125,6 +128,12 @@ export default function Home({ user, profile }) {
   async function logout() {
     await supabase.auth.signOut()
     window.location.reload()
+  }
+
+  // save the user's default currency (new groups inherit it; group currency can override)
+  async function saveCurrency(code) {
+    setCurrency(code)
+    await supabase.from('profiles').update({ currency: code }).eq('id', user.id)
   }
 
   async function saveUsername() {
@@ -177,20 +186,61 @@ export default function Home({ user, profile }) {
         <h1 style={{ fontSize: '1.5rem' }}>🧾 Smart Splitter</h1>
         <div style={{ position: 'relative' }}>
           <button
-            onClick={e => { e.stopPropagation(); setMenuOpen(o => !o) }}
+            onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); setProfileSection(null) }}
             className="btn btn-sm"
           >
-            @{profile?.username} ▾
+            Profile 
           </button>
           {menuOpen && (
-            <div className="menu" style={{ right: 0 }}>
+            <div className="menu" style={{ right: 0, minWidth: '230px' }} onClick={e => e.stopPropagation()}>
+              {/* Username — reveals the handle + edit only when tapped */}
               <button
-                onClick={() => { setMenuOpen(false); setNewName(profile.username); setUnameErr(''); setEditing(true) }}
+                onClick={() => setProfileSection(s => s === 'username' ? null : 'username')}
                 className="menu-item"
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
               >
-                ✏️ Rename
+                <span>Username</span>
+                <span className="faint">{profileSection === 'username' ? '▾' : '▸'}</span>
               </button>
-              <button onClick={logout} className="menu-item menu-item-danger">
+              {profileSection === 'username' && (
+                <div style={{ padding: '0.2rem 0.8rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontWeight: 700 }}>@{profile?.username}</span>
+                  <button
+                    onClick={() => { setMenuOpen(false); setProfileSection(null); setNewName(profile.username); setUnameErr(''); setEditing(true) }}
+                    title="Edit username"
+                    aria-label="Edit username"
+                    style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: 'none', borderRadius: 'var(--radius-pill)', width: '26px', height: '26px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' }}
+                  >
+                    ✏️
+                  </button>
+                </div>
+              )}
+
+              {/* Currency — reveals the list only when tapped */}
+              <button
+                onClick={() => setProfileSection(s => s === 'currency' ? null : 'currency')}
+                className="menu-item"
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)' }}
+              >
+                <span>Currency</span>
+                <span className="faint">{profileSection === 'currency' ? '▾' : '▸'}</span>
+              </button>
+              {profileSection === 'currency' && (
+                <div style={{ padding: '0.2rem 0.8rem 0.6rem' }}>
+                  <select
+                    className="input"
+                    value={currency}
+                    onChange={e => saveCurrency(e.target.value)}
+                    style={{ width: '100%' }}
+                  >
+                    {CURRENCIES.map(c => (
+                      <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <button onClick={logout} className="menu-item menu-item-danger" style={{ borderTop: '1px solid var(--border)' }}>
                 🚪 Logout
               </button>
             </div>

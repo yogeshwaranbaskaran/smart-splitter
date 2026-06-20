@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
+import { symbolFor } from './currency'
 
 export default function ManualSplit({ user, groupId, onBack }) {
   const [members, setMembers] = useState([])
@@ -8,6 +9,8 @@ export default function ManualSplit({ user, groupId, onBack }) {
   const [included, setIncluded] = useState({}) // { name: true }
   const [mode, setMode] = useState('even') // 'even' | 'uneven'
   const [customShares, setCustomShares] = useState({}) // { name: amount }
+  const [paidBy, setPaidBy] = useState('') // who fronted the money (defaults to creator)
+  const [currencyCode, setCurrencyCode] = useState('INR')
 
   useEffect(() => {
     loadMembers()
@@ -31,7 +34,13 @@ export default function ManualSplit({ user, groupId, onBack }) {
       ;(profs || []).forEach(p => { nameMap[p.id] = p.username })
     }
 
-    setMembers(rows.map(r => ({ user_id: r.user_id, name: nameMap[r.user_id] || r.email })))
+    const built = rows.map(r => ({ user_id: r.user_id, name: nameMap[r.user_id] || r.email }))
+    setMembers(built)
+    const mine = built.find(m => m.user_id === user.id)
+    if (mine) setPaidBy(mine.name)
+
+    const { data: g } = await supabase.from('groups').select('currency').eq('id', groupId).maybeSingle()
+    if (g?.currency) setCurrencyCode(g.currency)
   }
 
   const totalNum = parseFloat(total) || 0
@@ -46,6 +55,7 @@ export default function ManualSplit({ user, groupId, onBack }) {
   const shareFor = n => (n in customShares ? (parseFloat(customShares[n]) || 0) : autoEach)
   const unevenSum = selectedNames.reduce((s, n) => s + shareFor(n), 0)
   const remaining = totalNum - unevenSum
+  const cur = symbolFor(currencyCode) // currency symbol for this group's amounts
 
   function toggleMember(name) {
     setIncluded(prev => ({ ...prev, [name]: !prev[name] }))
@@ -71,11 +81,11 @@ export default function ManualSplit({ user, groupId, onBack }) {
       selectedNames.forEach(n => { shares[n] = evenEach })
     } else {
       if (autoEach < -0.5) {
-        alert(`You've assigned ₹${sumEdited.toFixed(2)}, which is more than the total ₹${totalNum.toFixed(2)}.`)
+        alert(`You've assigned ${cur}${sumEdited.toFixed(2)}, which is more than the total ${cur}${totalNum.toFixed(2)}.`)
         return
       }
       if (Math.abs(remaining) > 0.5) {
-        alert(`Amounts add up to ₹${unevenSum.toFixed(2)}, but the total is ₹${totalNum.toFixed(2)}. Make them match.`)
+        alert(`Amounts add up to ${cur}${unevenSum.toFixed(2)}, but the total is ${cur}${totalNum.toFixed(2)}. Make them match.`)
         return
       }
       selectedNames.forEach(n => { shares[n] = shareFor(n) })
@@ -83,7 +93,7 @@ export default function ManualSplit({ user, groupId, onBack }) {
 
     const { data: split, error } = await supabase
       .from('splits')
-      .insert({ name: splitName, created_by: user.email, group_id: groupId, split_type: 'manual' })
+      .insert({ name: splitName, created_by: user.email, group_id: groupId, split_type: 'manual', paid_by: paidBy, currency: currencyCode })
       .select()
       .single()
 
@@ -118,10 +128,21 @@ export default function ManualSplit({ user, groupId, onBack }) {
         <input
           className="input"
           type="number"
-          placeholder="Total amount (₹)"
+          placeholder={`Total amount (${cur})`}
           value={total}
           onChange={e => setTotal(e.target.value)}
         />
+        {members.length > 0 && (
+          <select
+            className="input field mt-1"
+            value={paidBy}
+            onChange={e => setPaidBy(e.target.value)}
+          >
+            {members.map(m => (
+              <option key={m.user_id} value={m.name}>Paid by @{m.name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       <h3 className="mt-2">Who's included?</h3>
@@ -137,14 +158,14 @@ export default function ManualSplit({ user, groupId, onBack }) {
               <input
                 className="input"
                 type="number"
-                placeholder="₹"
+                placeholder={cur}
                 value={m.name in customShares ? customShares[m.name] : (autoEach > 0 ? autoEach.toFixed(2) : '')}
                 onChange={e => setShare(m.name, e.target.value)}
                 style={{ width: '100px', color: m.name in customShares ? 'var(--text)' : 'var(--text-faint)' }}
               />
             )}
             {mode === 'even' && included[m.name] && (
-              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>₹{evenEach.toFixed(2)}</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{cur}{evenEach.toFixed(2)}</span>
             )}
           </label>
         ))}
@@ -162,10 +183,10 @@ export default function ManualSplit({ user, groupId, onBack }) {
       {mode === 'uneven' && selectedNames.length > 0 && (
         <p className="mt-1" style={{ color: unevenBad ? 'var(--danger)' : 'var(--success)', fontSize: '0.9rem' }}>
           {autoEach < -0.5
-            ? `Over by ₹${(-remaining).toFixed(2)} — you've assigned more than the total`
+            ? `Over by ${cur}${(-remaining).toFixed(2)} — you've assigned more than the total`
             : untouchedNames.length > 0
-              ? `₹${(totalNum - sumEdited).toFixed(2)} split evenly among ${untouchedNames.length} other${untouchedNames.length > 1 ? 's' : ''}`
-              : `Remaining: ₹${remaining.toFixed(2)} ${Math.abs(remaining) < 0.5 ? '✓' : '(must reach ₹0)'}`}
+              ? `${cur}${(totalNum - sumEdited).toFixed(2)} split evenly among ${untouchedNames.length} other${untouchedNames.length > 1 ? 's' : ''}`
+              : `Remaining: ${cur}${remaining.toFixed(2)} ${Math.abs(remaining) < 0.5 ? '✓' : `(must reach ${cur}0)`}`}
         </p>
       )}
 

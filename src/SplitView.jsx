@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams , useSearchParams} from 'react-router-dom'
 import { supabase } from './supabase'
+import { symbolFor } from './currency'
 
 export default function SplitView() {
   const { id } = useParams()
@@ -15,6 +16,7 @@ export default function SplitView() {
   const [allSelections, setAllSelections] = useState([])
   const [currentEmail, setCurrentEmail] = useState(null)
   const [creatorName, setCreatorName] = useState(null)
+  const [currencyCode, setCurrencyCode] = useState('INR')
 
   useEffect(() => {
     if (creatorFromUrl) {
@@ -81,6 +83,14 @@ export default function SplitView() {
 
     setSplit(splitData)
     setItems(itemsData || [])
+
+    // currency: the group's currency governs the split; guests/no-group use the snapshot
+    if (splitData?.group_id) {
+      const { data: g } = await supabase.from('groups').select('currency').eq('id', splitData.group_id).maybeSingle()
+      setCurrencyCode(g?.currency || splitData.currency || 'INR')
+    } else {
+      setCurrencyCode(splitData?.currency || 'INR')
+    }
 
     // created_by stores an email — look up the creator's @username to show instead
     if (splitData?.created_by) {
@@ -179,6 +189,8 @@ export default function SplitView() {
 
   if (!split) return <div className="screen-msg">Loading…</div>
 
+  const cur = symbolFor(currencyCode) // currency symbol used across this view
+
   // show @username if we resolved it, else fall back to the raw created_by email
   const creatorLabel = creatorName || split.created_by
 
@@ -193,7 +205,7 @@ export default function SplitView() {
 
         <div className="amount-hero mt-2">
           <div className="lbl">Total</div>
-          <div className="val">₹{total.toFixed(2)}</div>
+          <div className="val">{cur}{total.toFixed(2)}</div>
         </div>
 
         <h3 className="mt-2" style={{ marginBottom: '0.6rem' }}>Who owes what</h3>
@@ -203,7 +215,7 @@ export default function SplitView() {
               <span className="avatar-sm">{s.user_name.trim().charAt(0).toUpperCase()}</span>
               {s.user_name}
             </span>
-            <strong>₹{Number(s.share).toFixed(2)}</strong>
+            <strong>{cur}{Number(s.share).toFixed(2)}</strong>
           </div>
         ))}
       </div>
@@ -212,6 +224,24 @@ export default function SplitView() {
 
   const isCreator = currentEmail && currentEmail === split.created_by
   const billTotal = items.reduce((sum, item) => sum + Number(item.price), 0).toFixed(2)
+
+  // Split a stored (final) item price into base + tax using the rate we saved.
+  // tax_included: tax is inside the price; otherwise it was added on top.
+  function splitTax(item) {
+    const rate = item.tax_rate || 0
+    const price = Number(item.price)
+    if (rate <= 0) return { base: price, tax: 0 }
+    if (item.tax_included) {
+      const tax = Math.round((price * rate / (100 + rate)) * 100) / 100
+      return { base: Math.round((price - tax) * 100) / 100, tax }
+    }
+    const base = Math.round((price / (1 + rate / 100)) * 100) / 100
+    return { base, tax: Math.round((price - base) * 100) / 100 }
+  }
+
+  // whole bill is uniformly one mode (the parser applies one branch to all items)
+  const hasTax = items.some(i => (i.tax_rate || 0) > 0)
+  const taxMode = !hasTax ? 'none' : items.some(i => (i.tax_rate || 0) > 0 && !i.tax_included) ? 'added' : 'included'
 
   // shared: who-owes-what + item breakdown blocks
   function OwesAndBreakdown(summary) {
@@ -224,26 +254,43 @@ export default function SplitView() {
               <span className="avatar-sm">{name.trim().charAt(0).toUpperCase()}</span>
               {name}
             </span>
-            <strong>₹{total.toFixed(2)}</strong>
+            <strong>{cur}{total.toFixed(2)}</strong>
           </div>
         ))}
 
-        <h3 className="mt-2" style={{ marginBottom: '0.6rem' }}>Item breakdown</h3>
-        {items.map(item => {
-          const who = getItemSelectors(item.id)
-          const share = who.length > 0 ? (item.price / who.length).toFixed(2) : item.price
-          return (
-            <div key={item.id} className="bill-item">
-              <div className="row">
-                <strong>{item.name}</strong>
-                <span>₹{item.price}</span>
+        <h3 className="mt-2" style={{ marginBottom: '0.3rem' }}>Item breakdown</h3>
+        <p className="card-sub" style={{ marginBottom: '0.6rem' }}>
+          {taxMode === 'added'
+            ? '🧾 Tax added on top '
+            : taxMode === 'included'
+              ? '🧾 Prices already include tax.'
+              : '🧾 No tax on this bill.'}
+        </p>
+        <div className="card" style={{ padding: '0.2rem 0.9rem' }}>
+          {items.map((item, i) => {
+            const who = getItemSelectors(item.id)
+            const share = who.length > 0 ? (item.price / who.length).toFixed(2) : Number(item.price).toFixed(2)
+            const { base, tax } = splitTax(item)
+            const price = Number(item.price).toFixed(2)
+            const taxNote = taxMode === 'added' && tax > 0
+              ? `${cur}${base.toFixed(2)} + ${cur}${tax.toFixed(2)} tax`
+              : tax > 0 ? `incl. ${cur}${tax.toFixed(2)} tax` : ''
+            return (
+              <div key={item.id} style={{ padding: '0.6rem 0', borderTop: i ? '1px solid var(--border)' : 'none' }}>
+                <div className="row">
+                  <strong>{item.name}</strong>
+                  <strong>{cur}{price}</strong>
+                </div>
+                <div className="row" style={{ marginTop: '0.15rem', gap: '0.75rem' }}>
+                  <span className="faint" style={{ fontSize: '0.8rem' }}>{taxNote}</span>
+                  <span className="faint" style={{ fontSize: '0.8rem', textAlign: 'right' }}>
+                    {who.length > 0 ? `${who.join(', ')} · ${cur}${share} each` : 'Nobody picked me yet!'}
+                  </span>
+                </div>
               </div>
-              <div className="card-sub">
-                {who.length > 0 ? `${who.join(', ')} — ₹${share} each` : 'Nobody picked this'}
-              </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </>
     )
   }
@@ -273,7 +320,7 @@ export default function SplitView() {
         )}
         <div className="amount-hero mt-2">
           <div className="lbl">Bill total</div>
-          <div className="val">₹{billTotal}</div>
+          <div className="val">{cur}{billTotal}</div>
         </div>
         {OwesAndBreakdown(summary)}
       </div>
@@ -327,7 +374,7 @@ export default function SplitView() {
 
         <div className="amount-hero mt-2">
           <div className="lbl">Bill total</div>
-          <div className="val">₹{billTotal}</div>
+          <div className="val">{cur}{billTotal}</div>
         </div>
         <p className="muted mt-1">Waiting for everyone to confirm…</p>
 
@@ -369,10 +416,10 @@ export default function SplitView() {
             >
               <div className="row">
                 <strong>{item.name}</strong>
-                <span>₹{item.price}</span>
+                <span>{cur}{item.price}</span>
               </div>
               <div className="faint" style={{ marginTop: '0.25rem' }}>
-                {who.length > 0 ? `Picked by: ${who.join(', ')}` : 'Nobody picked this yet'}
+                {who.length > 0 ? `Picked by: ${who.join(', ')}` : 'Someone pick me!'}
               </div>
             </div>
           )
@@ -381,7 +428,7 @@ export default function SplitView() {
 
       <div className="row mt-1" style={{ fontSize: '1.1rem', fontWeight: 700 }}>
         <span>Your total</span>
-        <span>₹{getMyTotal()}</span>
+        <span>{cur}{getMyTotal()}</span>
       </div>
 
       <div className="cluster mt-2" style={{ flexWrap: 'wrap' }}>

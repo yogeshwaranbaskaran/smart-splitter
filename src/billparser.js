@@ -1,51 +1,78 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { supabase } from './supabase'
 
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
+// Reading the bill happens in the `scan-bill` Edge Function, NOT here — that is
+// where the Gemini API key lives now. This file keeps all the deterministic
+// money math, so the numbers stay ours and stay reproducible.
 
-export async function parseBill(imageFile) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' })
-  const imageData = await fileToBase64(imageFile)
-
-  const prompt = `Look at this bill/receipt image. Return ONLY this JSON, no markdown, no explanation.
-
-{
-  "items": [
-    {
-      "name": "english name",
-      "quantity": 1,
-      "line_amount": 100,
-      "tax_rate": 8,
-      "tax_included": false
-    }
-  ],
-  "tax_type": "added",
-  "grand_total": 1587
+// Thrown with a code the UI can turn into a specific message.
+export class ScanError extends Error {
+  constructor(code) {
+    super(code)
+    this.code = code
+  }
 }
 
-Rules:
-- name: translate to English
-- quantity: number of units bought. If the bill shows "3x299", quantity is 3
-- line_amount: the amount printed on the bill for that whole line, EXACTLY as shown. Do not add or remove tax — copy the printed number.
-- tax_rate: the tax percentage that applies to this item as a number (e.g. 8, 10, 5, 12, 18). If tax is shown only as a total at the bottom, infer the rate for each item; if you cannot tell, use the bill's main rate. If there is genuinely no tax, use 0.
-- tax_included: true if the printed line_amount already contains tax, false if tax is added separately (usually summarised at the bottom)
-- tax_type: the overall style of the whole bill — "included" if item prices already contain tax, "added" if tax is a separate charge added on top, "none" if there is no tax at all
-- grand_total: the final total actually paid, exactly as printed
+export async function parseBill(imageFile) {
+  const { base64, mimeType } = await prepareImage(imageFile)
 
-Tax styles vary by country — infer from the receipt:
-- Japan: items marked * = 8% added on top; 内 = tax already included; bags/non-food = 10% added
-- India (GST): CGST/SGST/IGST listed at the bottom and added on top; common rates 5/12/18%
-- If the item prices already add up (roughly) to the grand total, tax is "included"`
+  // invoke() attaches the Supabase auth header for us (the anon key for guests).
+  const { data, error } = await supabase.functions.invoke('scan-bill', {
+    body: { imageBase64: base64, mimeType },
+  })
 
-  const result = await model.generateContent([
-    prompt,
-    { inlineData: { mimeType: imageFile.type, data: imageData } }
-  ])
+  if (error) {
+    // Two different JSON shapes can come back:
+    //   our function  -> { error: "rate_limited" }
+    //   the Supabase gateway (e.g. function missing) -> { code: "NOT_FOUND", ... }
+    // Only a genuine fetch failure should say "network" — anything else would
+    // wrongly tell the user to check their internet.
+    let code = 'unknown'
+    try {
+      const body = await error.context?.json?.()
+      if (body?.error) code = body.error
+      else if (body?.code) code = `gateway_${body.code}`
+    } catch {
+      // No readable body at all = the request never completed.
+      code = 'network'
+    }
+    throw new ScanError(code)
+  }
+  if (data?.error) throw new ScanError(data.error)
 
-  const text = result.response.text()
-  const cleaned = text.replace(/```json|```/g, '').trim()
-  const parsed = JSON.parse(cleaned)
+  return processBill(data)
+}
 
-  return processBill(parsed)
+const MAX_EDGE = 1600 // px on the long side — keeps receipt text readable
+
+// Phone photos are several MB, and they now travel through our function instead
+// of straight to Google. Downscale to keep the upload small and the scan fast.
+async function prepareImage(file) {
+  // PDFs go through untouched — there is nothing to downscale, and Gemini reads
+  // them directly. Only images get resized.
+  if (!file.type.startsWith('image/')) {
+    return { base64: await fileToBase64(file), mimeType: file.type }
+  }
+
+  try {
+    const bitmap = await createImageBitmap(file)
+    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height))
+
+    // Already small enough — send the original bytes untouched.
+    if (scale === 1) {
+      return { base64: await fileToBase64(file), mimeType: file.type }
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(bitmap.width * scale)
+    canvas.height = Math.round(bitmap.height * scale)
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+    return { base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' }
+  } catch {
+    // Any browser hiccup (e.g. HEIC it cannot decode) — just send the original.
+    return { base64: await fileToBase64(file), mimeType: file.type }
+  }
 }
 
 const round2 = n => Math.round(n * 100) / 100

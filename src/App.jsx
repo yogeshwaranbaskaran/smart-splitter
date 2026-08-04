@@ -1,5 +1,30 @@
 import { useEffect, useState } from 'react'
 import { parseBill, deriveItem } from './billparser'
+
+// Turn a ScanError code from the edge function into something a person can act on.
+function scanErrorMessage(code) {
+  switch (code) {
+    case 'rate_limited':
+      return 'The bill reader is busy right now. Please wait a moment and try again.'
+    case 'gemini_failed':
+      return 'The bill reader is unavailable right now. Please try again shortly.'
+    case 'image_too_large':
+      return 'That file is too large. Try a smaller PDF, or retake the photo.'
+    case 'unsupported_type':
+      return 'That file type is not supported. Please upload a PDF, JPG or PNG.'
+    case 'bad_json':
+    case 'empty_response':
+      return 'Could not read bill. Try a clearer, straighter photo.'
+    case 'missing_key':
+      return 'Bill scanning is not configured. Please contact the app owner.'
+    case 'network':
+      return 'Network problem. Check your connection and try again.'
+    case 'gateway_NOT_FOUND':
+      return 'Bill scanning is not set up correctly. Please contact the app owner.'
+    default:
+      return 'Could not read bill. Try a clearer image.'
+  }
+}
 import { supabase } from './supabase'
 import { symbolFor } from './currency'
 import ManualSplit from './ManualSplit'
@@ -56,7 +81,7 @@ export default function App({ user, groupId, profile }) {
       setItems(parsed.items)
       setTaxType(parsed.taxType)
     } catch (err) {
-      alert('Could not read bill. Try a clearer image.')
+      alert(scanErrorMessage(err.code))
       console.error(err)
     }
     setLoading(false)
@@ -248,7 +273,7 @@ export default function App({ user, groupId, profile }) {
 
       <div className="dropzone">
         <div style={{ fontSize: '2.2rem' }}>🧾</div>
-        <div className="muted mt-1">Add your bill: Snap it or Pick a photo</div>
+        <div className="muted mt-1">Add your bill: snap it, or pick a photo or PDF</div>
         <div className="cluster mt-1" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
           <label className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
             📷 Take photo
@@ -256,7 +281,7 @@ export default function App({ user, groupId, profile }) {
           </label>
           <label className="btn btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
             🖼️ Choose file
-            <input type="file" accept="image/*" onChange={handleUpload} style={{ display: 'none' }} />
+            <input type="file" accept="image/*,application/pdf" onChange={handleUpload} style={{ display: 'none' }} />
           </label>
         </div>
       </div>

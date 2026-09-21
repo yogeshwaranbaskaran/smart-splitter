@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabase'
 import { CURRENCIES } from './currency'
+import { cap } from './names'
 
 // same rule as SetUsername.jsx: 3-20 chars, lowercase letters, numbers, underscore
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/
@@ -204,7 +205,7 @@ export default function Home({ user, profile }) {
               </button>
               {profileSection === 'username' && (
                 <div style={{ padding: '0.2rem 0.8rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontWeight: 700 }}>@{profile?.username}</span>
+                  <span style={{ fontWeight: 700 }}>@{cap(profile?.username)}</span>
                   <button
                     onClick={() => { setMenuOpen(false); setProfileSection(null); setNewName(profile.username); setUnameErr(''); setEditing(true) }}
                     title="Edit username"

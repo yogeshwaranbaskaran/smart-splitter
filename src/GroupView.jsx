@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from './supabase'
 import { symbolFor, CURRENCIES } from './currency'
+import { cap } from './names'
 
 export default function GroupView() {
   const { id } = useParams()
@@ -228,7 +229,7 @@ export default function GroupView() {
         .select('email, username')
         .in('email', emails)
       const map = {}
-      ;(profs || []).forEach(p => { if (p.username) map[p.email] = `@${p.username}` })
+      ;(profs || []).forEach(p => { if (p.username) map[p.email] = `@${cap(p.username)}` })
       setCreatorNames(map)
     }
   }
@@ -292,7 +293,7 @@ export default function GroupView() {
     setSearchQuery('')
     setSearchResults([])
     loadMembers()
-    alert(`Invited @${profile.username}`)
+    alert(`Invited @${cap(profile.username)}`)
   }
 
   // rename a split — creator only (the ⋮ menu is already creator-gated)
@@ -422,7 +423,7 @@ export default function GroupView() {
         <div className="card">
           {members.map((m, i) => (
             <div key={m.id} className="row" style={{ padding: '0.5rem 0', borderTop: i ? '1px solid var(--border)' : 'none' }}>
-              <span>{m.username ? `@${m.username}` : m.email} {m.user_id === user.id ? <span className="faint">(you)</span> : ''}</span>
+              <span>{m.username ? `@${cap(m.username)}` : m.email} {m.user_id === user.id ? <span className="faint">(you)</span> : ''}</span>
               {m.status === 'pending' && <span className="badge badge-warning">⏳ pending</span>}
             </div>
           ))}
@@ -443,7 +444,7 @@ export default function GroupView() {
 
         {searchResults.map(p => (
           <div key={p.id} className="line mt-1">
-            <span>@{p.username}</span>
+            <span>@{cap(p.username)}</span>
             <button onClick={() => invite(p)} className="btn btn-sm btn-success">Invite</button>
           </div>
         ))}
@@ -565,7 +566,7 @@ export default function GroupView() {
                         <div className="row">
                           <span className="cluster">
                             <span className="avatar-sm">{l.other.trim().charAt(0).toUpperCase()}</span>
-                            {l.other}
+                            {cap(l.other)}
                           </span>
                           <span className="cluster">
                             {l.net > 0
@@ -600,14 +601,14 @@ export default function GroupView() {
                         {/* waiting note once a settle-up is sent */}
                         {l.net < 0 && out && (
                           <p className="faint mt-1" style={{ margin: '0.4rem 0 0' }}>
-                            ⏳ Waiting for @{l.other} to confirm {cur}{Number(out.amount).toFixed(2)}
+                            Waiting for @{cap(l.other)} to confirm {cur}{Number(out.amount).toFixed(2)}
                           </p>
                         )}
 
                         {/* incoming repayment to confirm — kept visible so the payee notices */}
                         {l.net > 0 && inc && (
                           <div className="cluster mt-1" style={{ flexWrap: 'wrap' }}>
-                            <span className="faint">@{l.other} marked {cur}{Number(inc.amount).toFixed(2)} as paid</span>
+                            <span className="faint">@{cap(l.other)} marked {cur}{Number(inc.amount).toFixed(2)} as paid</span>
                             <button onClick={() => confirmSettlement(inc.id)} className="btn btn-sm btn-success">Confirm received</button>
                           </div>
                         )}

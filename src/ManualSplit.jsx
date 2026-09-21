@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { symbolFor } from './currency'
+import { cap } from './names'
 
 export default function ManualSplit({ user, groupId, onBack }) {
   const [members, setMembers] = useState([])
@@ -139,7 +140,7 @@ export default function ManualSplit({ user, groupId, onBack }) {
             onChange={e => setPaidBy(e.target.value)}
           >
             {members.map(m => (
-              <option key={m.user_id} value={m.name}>Paid by @{m.name}</option>
+              <option key={m.user_id} value={m.name}>Paid by @{cap(m.name)}</option>
             ))}
           </select>
         )}
@@ -152,7 +153,7 @@ export default function ManualSplit({ user, groupId, onBack }) {
           <label key={m.user_id} className="row" style={{ padding: '0.55rem 0', borderTop: i ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}>
             <span className="cluster">
               <input type="checkbox" checked={!!included[m.name]} onChange={() => toggleMember(m.name)} style={{ accentColor: 'var(--accent)', width: '1.05rem', height: '1.05rem' }} />
-              <span>@{m.name}</span>
+              <span>@{cap(m.name)}</span>
             </span>
             {mode === 'uneven' && included[m.name] && (
               <input

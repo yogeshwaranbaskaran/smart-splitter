@@ -8,13 +8,13 @@ description: Run, start, build, screenshot, or drive the Smart Splitter web app 
 Vite + React bill-splitting PWA. Backend is a **live production Supabase**
 (hardcoded in `src/supabase.js`) — there is no local backend to start.
 Drive it headlessly with the Playwright driver in this skill dir.
-All paths below are relative to `frontend/` (the app root, a git repo).
+All paths below are relative to `app/` (the app root, a git repo).
 
 ## Prerequisites
 
 - Node ≥ 20 (verified on v26). No system browser needed — the driver
   uses Playwright's downloaded headless Chromium.
-- `frontend/.env` must contain `VITE_GEMINI_API_KEY=...` (already present
+- `app/.env` must contain `VITE_GEMINI_API_KEY=...` (already present
   on this machine; bill scanning silently hangs at "Reading bill…" without it).
 
 One-time driver setup:
@@ -28,7 +28,7 @@ npx playwright install chromium  # ~115 MB → ~/.cache/ms-playwright
 ## Build / install app deps
 
 ```bash
-npm install        # in frontend/
+npm install        # in app/
 ```
 
 ## Run (agent path) — dev server + driver
@@ -101,7 +101,7 @@ your change broke something — compare against baseline.
 - **Bill parsing takes ~30–45 s** (Gemini vision on a ~4 MB photo) and
   costs a real API call on the key in `.env`. `waitfor Create split`
   covers it; a 30 s timeout does not. Sample bills to upload live in
-  `../Data - Bills/` (sibling of `frontend/`).
+  `../Data - Bills/` (sibling of `app/`).
 
 ## Troubleshooting
 

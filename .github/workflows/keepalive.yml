@@ -1,0 +1,26 @@
+# Keeps the free-tier Supabase project from auto-pausing.
+# Supabase pauses a free project after ~7 days with no API activity; this
+# makes one tiny read every 3 days. The key below is the PUBLIC anon key
+# (the same one shipped in src/supabase.js), so it is safe in the repo.
+#
+# Gotcha: GitHub disables scheduled workflows after 60 days with no commits
+# to the repo. If the project pauses again despite this, check that the
+# workflow is still enabled under Actions.
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: '0 6 */3 * *'   # every 3 days, 06:00 UTC
+  workflow_dispatch:         # lets you run it by hand from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read one row
+        run: |
+          KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZnbnlqbGx5ZnVrbnNsYWdreGJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMzQ3NDQsImV4cCI6MjA5MTcxMDc0NH0.sOm03KG1cxOviKLE2imdCY3Cltq37hEBGBt1Et_M8js"
+          curl -sf --max-time 30 \
+            "https://vgnyjllyfuknslagkxbg.supabase.co/rest/v1/groups?select=id&limit=1" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" > /dev/null
+          echo "Supabase answered; project stays awake."

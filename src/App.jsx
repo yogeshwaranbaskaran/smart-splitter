@@ -28,6 +28,7 @@ function scanErrorMessage(code) {
 import { supabase } from './supabase'
 import { symbolFor } from './currency'
 import ManualSplit from './ManualSplit'
+import { cap } from './names'
 
 export default function App({ user, groupId, profile }) {
   const [items, setItems] = useState([])
@@ -265,7 +266,7 @@ export default function App({ user, groupId, profile }) {
             onChange={e => setPaidBy(e.target.value)}
           >
             {members.map(m => (
-              <option key={m.user_id} value={m.name}>Paid by @{m.name}</option>
+              <option key={m.user_id} value={m.name}>Paid by @{cap(m.name)}</option>
             ))}
           </select>
         )}

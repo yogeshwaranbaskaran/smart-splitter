@@ -91,31 +91,68 @@ Deno.serve(async (req) => {
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: PROMPT },
-            { inline_data: { mime_type: mimeType, data: imageBase64 } },
-          ],
-        }],
-        // Ask Gemini for JSON directly instead of hoping it skips the ```json fence.
-        generationConfig: { responseMimeType: "application/json" },
-      }),
+    const body = JSON.stringify({
+      contents: [{
+        parts: [
+          { text: PROMPT },
+          { inline_data: { mime_type: mimeType, data: imageBase64 } },
+        ],
+      }],
+      // Ask Gemini for JSON directly instead of hoping it skips the ```json fence.
+      generationConfig: { responseMimeType: "application/json" },
     });
 
+    // 503 UNAVAILABLE and 500 mean Google's servers are busy, not that anything
+    // is wrong with the request. They are transient, so retry with backoff
+    // instead of showing the user a failure. 429 is NOT retried here: that is a
+    // quota wall, and hammering it just burns more of the allowance.
+    const RETRY_ON = [500, 503];
+    const BACKOFF_MS = [800, 2500];
+
+    // Timing is logged because Gemini latency is wildly variable and the only way
+    // to know what is actually slow (upload size, the model, or a retry) is to
+    // measure it. Never tune this from a single observation.
+    const kb = Math.round(imageBase64.length * 0.75 / 1024);
+    const t0 = Date.now();
+    let attempts = 1;
+
+    let res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    for (let attempt = 0; attempt < BACKOFF_MS.length && RETRY_ON.includes(res.status); attempt++) {
+      // Jitter stops several people scanning at once from retrying in lockstep.
+      const wait = BACKOFF_MS[attempt] + Math.floor(Math.random() * 400);
+      console.log(`Gemini ${res.status}; retrying in ${wait}ms (attempt ${attempt + 1})`);
+      await new Promise((r) => setTimeout(r, wait));
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      attempts++;
+    }
+    console.log(`Gemini ${res.status} in ${Date.now() - t0}ms, ${attempts} attempt(s), ${kb}KB image, model ${MODEL}`);
+
     if (!res.ok) {
-      const body = await res.text();
-      console.error("Gemini error", res.status, body);
+      const errBody = await res.text();
+      console.error("Gemini error", res.status, errBody);
       // 429 = rate limited on the free tier; worth its own message ("try again"),
       // since unlike a real failure it usually succeeds a moment later.
       if (res.status === 429) return json({ error: "rate_limited" }, 429);
+      // Still overloaded after every retry.
+      if (RETRY_ON.includes(res.status)) return json({ error: "overloaded" }, 503);
       return json({ error: "gemini_failed", status: res.status }, 502);
     }
 
     const data = await res.json();
+    const u = data?.usageMetadata;
+    if (u) {
+      // thoughtsTokenCount is the giveaway: if it is large, the model is spending
+      // most of the call reasoning about a task that only needs extraction.
+      console.log(`tokens: prompt=${u.promptTokenCount} output=${u.candidatesTokenCount} thoughts=${u.thoughtsTokenCount ?? 0} total=${u.totalTokenCount}`);
+    }
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) return json({ error: "empty_response" }, 502);
 

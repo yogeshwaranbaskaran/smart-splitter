@@ -4,6 +4,8 @@ import { parseBill, deriveItem } from './billparser'
 // Turn a ScanError code from the edge function into something a person can act on.
 function scanErrorMessage(code) {
   switch (code) {
+    case 'overloaded':
+      return 'The bill reader is very busy at the moment. Please try again in a minute.'
     case 'rate_limited':
       return 'The bill reader is busy right now. Please wait a moment and try again.'
     case 'gemini_failed':

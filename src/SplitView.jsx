@@ -31,6 +31,21 @@ export default function SplitView() {
   const [currentEmail, setCurrentEmail] = useState(null)
   const [creatorName, setCreatorName] = useState(null)
   const [currencyCode, setCurrencyCode] = useState('INR')
+  // Group members, so the creator can pick on someone else's behalf.
+  const [members, setMembers] = useState([])
+  // Whose selection the picking screen is editing. Empty = my own.
+  // Only the creator can set this to anyone else.
+  const [pickingFor, setPickingFor] = useState('')
+  const [disputeFor, setDisputeFor] = useState(null) // item row being disputed
+  const [disputeNote, setDisputeNote] = useState('')
+  const [messages, setMessages] = useState([])
+  const [replyTo, setReplyTo] = useState(null)   // thread I am posting to
+  const [replyNote, setReplyNote] = useState('')
+
+  // Everything the picking screen writes goes to this person. It is me unless
+  // the creator has switched to assigning for someone else.
+  const targetUser = pickingFor || userName
+
 
   useEffect(() => {
     if (creatorFromUrl) {
@@ -106,6 +121,8 @@ export default function SplitView() {
       setCurrencyCode(splitData?.currency || 'INR')
     }
 
+    if (splitData?.group_id) loadMembers(splitData.group_id)
+
     // created_by stores an email — look up the creator's @username to show instead
     if (splitData?.created_by) {
       const { data: prof } = await supabase
@@ -117,6 +134,18 @@ export default function SplitView() {
     }
   }
 
+  async function loadMembers(groupId) {
+    const { data: rows } = await supabase
+      .from('group_members')
+      .select('user_id')
+      .eq('group_id', groupId)
+      .eq('status', 'accepted')
+    const ids = (rows || []).map(r => r.user_id)
+    if (!ids.length) return setMembers([])
+    const { data: profs } = await supabase.from('profiles').select('username').in('id', ids)
+    setMembers((profs || []).map(p => p.username).filter(Boolean))
+  }
+
   async function loadSelections() {
     const { data } = await supabase
       .from('selections')
@@ -124,14 +153,21 @@ export default function SplitView() {
       .eq('split_id', id)
 
     setAllSelections(data || [])
+
+    const { data: msgs } = await supabase
+      .from('split_messages')
+      .select('*')
+      .eq('split_id', id)
+      .order('created_at')
+    setMessages(msgs || [])
   }
 
   // Rehydrate my own state from the database whenever selections or my identity
   // load. Two things get restored: that I already acted, and WHICH items I took
   // (so "Edit my selection" starts from my real picks instead of a blank slate).
   useEffect(() => {
-    if (!userName || editing) return
-    const mine = allSelections.filter(s => s.user_name === userName)
+    if (!targetUser || editing) return
+    const mine = allSelections.filter(s => s.user_name === targetUser)
     if (mine.length === 0) return
 
     setConfirmed(true)
@@ -146,7 +182,26 @@ export default function SplitView() {
     })
     setSelections(picks)
     setQtys(q)
-  }, [allSelections, userName, editing])
+  }, [allSelections, targetUser, editing])
+
+  // Switching who I am picking for must load THAT person's current picks.
+  // The rehydrate effect below is skipped while editing, and switching target
+  // turns editing on, so without this the creator would see their own picks
+  // while assigning for someone else.
+  function switchPickingFor(name) {
+    setPickingFor(name)
+    setEditing(true)
+    const target = name || userName
+    const theirs = allSelections.filter(r => r.user_name === target && r.item_id)
+    const picks = {}
+    const q = {}
+    theirs.forEach(r => {
+      picks[r.item_id] = true
+      if (r.qty !== null && r.qty !== undefined) q[r.item_id] = Number(r.qty)
+    })
+    setSelections(picks)
+    setQtys(q)
+  }
 
   function toggleItem(itemId) {
     setSelections(prev => ({
@@ -174,14 +229,20 @@ export default function SplitView() {
   }
 
   async function confirmSelections() {
-    if (!userName) return
+    if (!targetUser) return
 
-    // delete previous selections by this user
+    // Picking for someone else records who did it, so they can see it was not
+    // their own choice and push back. Picking for myself clears that flag and
+    // any dispute, because editing it is me taking ownership.
+    const assignedBy = targetUser === userName ? null : userName
+    const hadDispute = allSelections.some(r => r.user_name === userName && r.disputed)
+    const hadRows = allSelections.some(r => r.user_name === targetUser)
+
     await supabase
       .from('selections')
       .delete()
       .eq('split_id', id)
-      .eq('user_name', userName)
+      .eq('user_name', targetUser)
 
     const selected = items.filter(item => selections[item.id])
 
@@ -193,14 +254,26 @@ export default function SplitView() {
     const toInsert = selected.map(item => ({
       split_id: id,
       item_id: item.id,
-      user_name: userName,
+      user_name: targetUser,
+      assigned_by: assignedBy,
       qty: qtys[item.id] ?? null,   // null = share the remainder
       share: 0                      // real amount is written by recomputeShares
     }))
 
     await supabase.from('selections').insert(toInsert)
+    // Re-picking my own items settles any dispute I had raised: the new rows
+    // carry disputed=false, so the thread would otherwise be orphaned.
+    if (!pickingFor && hadDispute) await clearThread(userName)
     await recomputeShares()
-    setConfirmed(true)
+    if (pickingFor) {
+      // "changed" only if they already had rows before this save, so the first
+      // assignment does not arrive worded as an edit.
+      notify({ kind: hadRows ? 'changed' : 'assigned', forUser: pickingFor, byUser: userName })
+      // Done assigning for this person; drop back to my own selection.
+      setPickingFor('')
+    } else {
+      setConfirmed(true)
+    }
     setEditing(false)
   }
 
@@ -241,13 +314,14 @@ export default function SplitView() {
   }
 
   async function markNothing() {
-    if (!userName) return
+    if (!targetUser) return
     // record that this person acted but owes nothing (a marker row, no item)
-    await supabase.from('selections').delete().eq('split_id', id).eq('user_name', userName)
+    await supabase.from('selections').delete().eq('split_id', id).eq('user_name', targetUser)
     await supabase.from('selections').insert({
       split_id: id,
       item_id: null,
-      user_name: userName,
+      user_name: targetUser,
+      assigned_by: targetUser === userName ? null : userName,
       share: 0
     })
     // Dropping out of items changes what everyone else owes on them, so shares
@@ -255,6 +329,151 @@ export default function SplitView() {
     await recomputeShares()
     setConfirmed(true)
     setEditing(false)
+  }
+
+  // Rows somebody else picked for me, that I have not taken ownership of.
+  function assignedToMe() {
+    return allSelections.filter(r => r.user_name === userName && r.assigned_by)
+  }
+
+  // A settled dispute takes its thread with it. Otherwise the next dispute
+  // opens with the previous argument still sitting in it, which reads as if
+  // those messages belong to the new one.
+  // Email is a side effect, never a gate: if Brevo is down the selection still
+  // saves. Failures are logged, not surfaced.
+  function notify(payload) {
+    supabase.functions
+      .invoke('notify-selection', { body: { splitId: id, ...payload } })
+      .catch(err => console.error('notify-selection failed', err))
+  }
+
+  async function clearThread(aboutUser) {
+    await supabase
+      .from('split_messages')
+      .delete()
+      .eq('split_id', id)
+      .eq('about_user', aboutUser)
+  }
+
+  // "These are mine": clear the assigned flag so they become my own choices.
+  async function acceptAssignment() {
+    await supabase
+      .from('selections')
+      .update({ assigned_by: null, disputed: false, dispute_note: null })
+      .eq('split_id', id)
+      .eq('user_name', userName)
+    await clearThread(userName)
+    loadSelections()
+  }
+
+  // "That's not right": flag it for the whole group. Deliberately does NOT block
+  // finalize — a dispute that blocks lets one person hold the split hostage.
+  async function raiseDispute() {
+    await supabase
+      .from('selections')
+      .update({ disputed: true })
+      .eq('split_id', id)
+      .eq('user_name', userName)
+    await supabase.from('split_messages').insert({
+      split_id: id,
+      about_user: userName,
+      author: userName,
+      body: disputeNote.trim() || 'The items picked for me are wrong.',
+    })
+    notify({ kind: 'disputed', byUser: userName, note: disputeNote.trim() || null })
+    setDisputeFor(null)
+    setDisputeNote('')
+    loadSelections()
+  }
+
+  // Anyone in the split can post: the person who actually had the item is
+  // often neither the creator nor the person disputing.
+  async function sendReply() {
+    if (!replyNote.trim() || !userName) return
+    await supabase.from('split_messages').insert({
+      split_id: id,
+      about_user: replyTo,
+      author: userName,
+      body: replyNote.trim(),
+    })
+    setReplyTo(null)
+    setReplyNote('')
+    loadSelections()
+  }
+
+  function DisputeBox() {
+    if (!disputeFor) return null
+    return (
+      <div className="card mt-2">
+        <strong>What is wrong?</strong>
+        <input
+          className="input mt-1"
+          autoFocus
+          placeholder="For example: I did not have the eggs"
+          value={disputeNote}
+          onChange={e => setDisputeNote(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && raiseDispute()}
+        />
+        <div className="cluster mt-1" style={{ flexWrap: 'wrap' }}>
+          <button onClick={raiseDispute} className="btn btn-sm btn-danger">Send</button>
+          <button onClick={() => { setDisputeFor(null); setDisputeNote('') }} className="btn btn-sm">Cancel</button>
+        </div>
+        <p className="faint" style={{ margin: '0.5rem 0 0' }}>
+          Everyone in the split sees this. It does not change the amounts by itself.
+        </p>
+      </div>
+    )
+  }
+
+  // Disputes raised by anyone, shown to the whole group.
+  function DisputeList() {
+    const names = [...new Set(allSelections.filter(r => r.disputed).map(r => r.user_name))]
+    if (!names.length) return null
+    return (
+      <div className="card mt-2" style={{ borderLeft: '4px solid var(--danger)' }}>
+        <strong>Someone disagrees with their items</strong>
+        {names.map(n => {
+          const thread = messages.filter(m => m.about_user === n)
+          return (
+            <div key={n} style={{ marginTop: '0.6rem' }}>
+              <strong style={{ fontSize: '0.9rem' }}>About {cap(n)}'s items</strong>
+              {thread.map(m => (
+                <p
+                  key={m.id}
+                  className="faint"
+                  style={{ margin: '0.25rem 0 0', paddingLeft: m.author === n ? 0 : '1rem' }}
+                >
+                  <strong>{cap(m.author)}:</strong> {m.body}
+                </p>
+              ))}
+              {replyTo !== n ? (
+                <button onClick={() => { setReplyTo(n); setReplyNote('') }} className="btn btn-sm mt-1">
+                  Reply
+                </button>
+              ) : (
+                <div className="mt-1">
+                  <input
+                    className="input"
+                    autoFocus
+                    placeholder="Write a reply"
+                    value={replyNote}
+                    onChange={e => setReplyNote(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && sendReply()}
+                  />
+                  <div className="cluster mt-1" style={{ flexWrap: 'wrap' }}>
+                    <button onClick={sendReply} className="btn btn-sm btn-primary">Send</button>
+                    <button onClick={() => { setReplyTo(null); setReplyNote('') }} className="btn btn-sm">Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+        <p className="faint" style={{ margin: '0.6rem 0 0' }}>
+          Only the person who raised it can clear it, by accepting or editing their items.
+        </p>
+      </div>
+    )
   }
 
   async function finalizeSplit() {
@@ -414,6 +633,12 @@ export default function SplitView() {
                           <span className="faint">
                             {r.quantity > 1 || sh.explicit ? ` · ${fmtQty(sh.qty)} of ${fmtQty(r.quantity)}` : ''}
                             {!sh.explicit && claimers.length > 1 ? ' (shared equally)' : ''}
+                            {(() => {
+                              const row = allSelections.find(x => x.item_id === item.id && x.user_name === name)
+                              if (row?.disputed) return ' · disputed'
+                              if (row?.assigned_by) return ` · picked by ${cap(row.assigned_by)}`
+                              return ''
+                            })()}
                           </span>
                         </span>
                         <strong>{cur}{sh.amount.toFixed(2)}</strong>
@@ -458,6 +683,27 @@ export default function SplitView() {
           <button onClick={unfinalizeSplit} className="btn btn-sm mt-1" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>
             ← Reopen split (allow edits again)
           </button>
+        )}
+
+        {DisputeList()}
+
+        {/* A mistake found after locking still needs somewhere to go. Flagging
+            changes no amounts; only the creator reopening can do that. */}
+        {!isCreator && allSelections.some(r => r.user_name === userName) && (
+          allSelections.some(r => r.user_name === userName && r.disputed) ? (
+            <p className="faint mt-1">
+              You flagged this split. Ask {creatorLabel} to reopen it if it needs changing.
+            </p>
+          ) : (
+            <button onClick={() => setDisputeFor(true)} className="btn btn-sm mt-1">
+              Something is wrong with mine
+            </button>
+          )
+        )}
+        {DisputeBox()}
+
+        {isCreator && allSelections.some(r => r.disputed) && (
+          <p className="faint mt-1">Reopen the split to correct it.</p>
         )}
         <div className="amount-hero mt-2">
           <div className="lbl">Bill total</div>
@@ -513,6 +759,29 @@ export default function SplitView() {
           <div className="lbl">Bill total</div>
           <div className="val">{cur}{billTotal}</div>
         </div>
+        {/* Someone picked these for me. I can take ownership or push back. */}
+        {assignedToMe().length > 0 && (
+          <div className="card mt-2" style={{ borderLeft: '4px solid var(--accent)' }}>
+            <strong>{cap(assignedToMe()[0].assigned_by)} picked your items for you</strong>
+            <p className="faint" style={{ margin: '0.25rem 0 0' }}>
+              {assignedToMe().some(r => r.disputed)
+                ? 'You have flagged this as wrong. The creator can see it.'
+                : 'Check the Items tab. If it is right, confirm it; if not, say so.'}
+            </p>
+            <div className="cluster mt-2" style={{ flexWrap: 'wrap' }}>
+              <button onClick={acceptAssignment} className="btn btn-sm btn-primary">
+                {assignedToMe().some(r => r.disputed) ? 'Settled, these are mine' : 'These are mine'}
+              </button>
+              {!assignedToMe().some(r => r.disputed) && (
+                <button onClick={() => setDisputeFor(true)} className="btn btn-sm">That is not right</button>
+              )}
+              <button onClick={() => setEditing(true)} className="btn btn-sm">Edit them</button>
+            </div>
+          </div>
+        )}
+
+        {DisputeList()}
+
         {/* ---- Status card: is this split complete, and can it be locked? ---- */}
         <div
           className="card mt-2"
@@ -564,6 +833,29 @@ export default function SplitView() {
           <button onClick={() => setEditing(true)} className="btn btn-sm">Edit my selection</button>
         </div>
 
+        {DisputeBox()}
+
+        {/* Entry point into assigning. Lives here because the summary is where
+            you notice somebody has not picked yet. */}
+        {isCreator && members.length > 1 && (
+          <div className="card mt-2">
+            <strong>Pick for someone else</strong>
+            <p className="faint" style={{ margin: '0.25rem 0 0.6rem' }}>
+              If someone has not opened the split, choose their items for them.
+            </p>
+            <div className="cluster" style={{ flexWrap: 'wrap' }}>
+              {members.filter(m => m !== userName).map(m => {
+                const done = allSelections.some(r => r.user_name === m)
+                return (
+                  <button key={m} onClick={() => switchPickingFor(m)} className="btn btn-sm">
+                    {cap(m)}{done ? '' : ' (not picked)'}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Same two-button tab pattern as the group page, for consistency. */}
         <div className="cluster mt-2" role="tablist" aria-label="Summary sections">
           <button
@@ -589,7 +881,39 @@ export default function SplitView() {
     <div className="page">
       <a href={backHref} className="back-link">Back</a>
       <h2>{split.name}</h2>
-      <p className="muted mt-1">Hi {cap(userName)}, pick your items:</p>
+
+      {/* Who these taps belong to. Kept prominent and switchable, because
+          picking for the wrong person is silent and annoying to undo. */}
+      {isCreator && members.length > 1 ? (
+        <div
+          className="card mt-1"
+          style={{ borderLeft: `4px solid ${pickingFor ? 'var(--accent)' : 'var(--border)'}`, padding: '0.7rem 0.9rem' }}
+        >
+          <div className="cluster" style={{ alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <span className="avatar-sm">{cap(targetUser).charAt(0)}</span>
+            <label className="faint" htmlFor="pickfor">Picking for</label>
+            <select
+              id="pickfor"
+              className="input"
+              style={{ width: 'auto', fontWeight: 700 }}
+              value={pickingFor}
+              onChange={e => switchPickingFor(e.target.value)}
+            >
+              <option value="">Myself ({cap(userName)})</option>
+              {members.filter(m => m !== userName).map(m => (
+                <option key={m} value={m}>{cap(m)}</option>
+              ))}
+            </select>
+          </div>
+          {pickingFor && (
+            <p className="faint" style={{ margin: '0.4rem 0 0' }}>
+              These taps are saved as {cap(pickingFor)}'s. They can change them or flag them later.
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="muted mt-1">Hi {cap(userName)}, pick your items:</p>
+      )}
 
       <div className="mt-1">
         {items.map(item => {
@@ -703,10 +1027,10 @@ export default function SplitView() {
 
       <div className="cluster mt-2" style={{ flexWrap: 'wrap' }}>
         <button onClick={confirmSelections} className="btn btn-lg btn-primary">
-          Confirm my selection
+          {pickingFor ? `Save for ${cap(pickingFor)}` : 'Confirm my selection'}
         </button>
         <button onClick={markNothing} className="btn btn-lg">
-          Nothing here is mine
+          {pickingFor ? `Nothing here is ${cap(pickingFor)}'s` : 'Nothing here is mine'}
         </button>
       </div>
     </div>
